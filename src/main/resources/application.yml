@@ -76,6 +76,25 @@ spring:
       max-file-size: 10MB
       max-request-size: 100MB
 
+  # Spring AI 配置
+  ai:
+    # 模型提供商：deepseek 或 ollama
+    provider: ${AI_PROVIDER:deepseek}
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
+      chat:
+        options:
+          model: ${AI_DEEPSEEK_MODEL:deepseek-chat}
+          temperature: 0.7
+          max-tokens: 4096
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${AI_OLLAMA_MODEL:qwen2.5:7b}
+          temperature: 0.7
+          num-predict: 4096
+
 # MyBatis Plus配置
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
