@@ -26,10 +26,16 @@ logs/
 # ===== Frontend =====
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
+frontend/.vite/
+frontend/*.local
 
 # ===== OS =====
 .DS_Store
 Thumbs.db
+
+# ===== Docker volumes =====
+docker/data/
 
 # ===== Claude Code =====
 .claude/
