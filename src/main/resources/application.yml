@@ -5,6 +5,9 @@ spring:
   profiles:
     active: dev
 
+  config:
+    import: optional:file:.env[.properties]
+
   # 数据源配置
   datasource:
     driver-class-name: org.postgresql.Driver
