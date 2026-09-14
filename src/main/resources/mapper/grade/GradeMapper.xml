@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.grade.mapper.GradeMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.school.module.grade.entity.Grade">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="school_id" property="schoolId" jdbcType="BIGINT"/>
+        <result column="grade_name" property="gradeName" jdbcType="VARCHAR"/>
+        <result column="grade_code" property="gradeCode" jdbcType="INTEGER"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+        <result column="deleted" property="deleted" jdbcType="INTEGER"/>
+    </resultMap>
+
+    <!-- 基础列 -->
+    <sql id="Base_Column_List">
+        id, school_id, grade_name, grade_code, created_at, updated_at, deleted
+    </sql>
+
+    <!-- 根据学校ID和年级编码查询 -->
+    <select id="selectBySchoolIdAndCode" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM grade
+        WHERE school_id = #{schoolId}
+        AND grade_code = #{gradeCode}
+        AND deleted = 0
+    </select>
+
+    <!-- 根据学校ID查询年级列表 -->
+    <select id="selectBySchoolId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM grade
+        WHERE school_id = #{schoolId}
+        AND deleted = 0
+        ORDER BY grade_code ASC
+    </select>
+
+    <!-- 分页查询年级列表 -->
+    <select id="selectPageByQuery" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM grade
+        WHERE deleted = 0
+        <if test="query.schoolId != null">
+            AND school_id = #{query.schoolId}
+        </if>
+        <if test="query.gradeName != null and query.gradeName != ''">
+            AND grade_name LIKE CONCAT('%', #{query.gradeName}, '%')
+        </if>
+        <if test="query.gradeCode != null">
+            AND grade_code = #{query.gradeCode}
+        </if>
+        ORDER BY grade_code ASC
+    </select>
+
+    <!-- 统计年级下的班级数量 -->
+    <select id="countClassesByGradeId" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM class
+        WHERE grade_id = #{gradeId}
+        AND deleted = 0
+    </select>
+
+</mapper>

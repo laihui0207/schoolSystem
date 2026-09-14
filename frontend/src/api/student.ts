@@ -1,0 +1,117 @@
+import request from '@/utils/request'
+
+/**
+ * 对应后端 StudentResponse
+ * 后端无 studentName / idCard / phone / email
+ * status: 0=离校, 1=在读, 2=休学
+ * classes 是数组 [{classId, className, gradeName}]
+ */
+export interface StudentClassInfo {
+  classId: number
+  className: string
+  gradeName: string
+}
+
+export interface Student {
+  id?: number
+  userId?: number
+  studentNo: string
+  schoolId: number
+  schoolName?: string
+  name: string
+  gender?: number
+  genderName?: string
+  birthDate?: string
+  enrollmentDate?: string
+  status?: number
+  statusName?: string
+  classes?: StudentClassInfo[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface StudentQuery {
+  studentNo?: string
+  name?: string
+  schoolId?: number
+  classId?: number
+  status?: number
+  pageNum: number
+  pageSize: number
+}
+
+export interface StudentPage {
+  records: Student[]
+  total: number
+}
+
+export const getStudentList = (params: StudentQuery) => {
+  return request<StudentPage>({
+    url: '/students',
+    method: 'get',
+    params
+  })
+}
+
+export const getStudentDetail = (id: number) => {
+  return request<Student>({
+    url: `/students/${id}`,
+    method: 'get'
+  })
+}
+
+/**
+ * ponytail: 只发 StudentCreateRequest 认的字段
+ * studentNo / schoolId / name 必填
+ */
+export const createStudent = (data: Student) => {
+  return request<Student>({
+    url: '/students',
+    method: 'post',
+    data: {
+      studentNo: data.studentNo,
+      schoolId: data.schoolId,
+      name: data.name,
+      gender: data.gender,
+      birthDate: data.birthDate,
+      enrollmentDate: data.enrollmentDate,
+      userId: data.userId
+    }
+  })
+}
+
+/**
+ * ponytail: 只发 StudentUpdateRequest 认的字段
+ * status: 0=离校, 1=在读, 2=休学
+ */
+export const updateStudent = (id: number, data: Student) => {
+  return request<Student>({
+    url: `/students/${id}`,
+    method: 'put',
+    data: {
+      name: data.name,
+      gender: data.gender,
+      birthDate: data.birthDate,
+      enrollmentDate: data.enrollmentDate,
+      status: data.status
+    }
+  })
+}
+
+export const deleteStudent = (id: number) => {
+  return request({
+    url: `/students/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * ponytail: 后端 @RequestParam Long classId，必须用 params 不能用 data
+ */
+export const assignClass = (studentId: number, classId: number) => {
+  return request({
+    url: `/students/${studentId}/assign-class`,
+    method: 'post',
+    params: { classId }
+  })
+}

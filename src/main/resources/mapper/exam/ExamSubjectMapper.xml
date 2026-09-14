@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.exam.mapper.ExamSubjectMapper">
+
+    <!-- 根据考试ID查询科目列表 -->
+    <select id="selectByExamId" resultType="com.school.module.exam.entity.ExamSubject">
+        SELECT
+            id,
+            exam_id,
+            subject_id,
+            full_score,
+            sort_order,
+            created_at,
+            updated_at,
+            deleted
+        FROM exam_subject
+        WHERE deleted = 0
+          AND exam_id = #{examId}
+        ORDER BY sort_order ASC
+    </select>
+
+    <!-- 删除考试的所有科目关联 -->
+    <delete id="deleteByExamId">
+        UPDATE exam_subject
+        SET deleted = 1
+        WHERE exam_id = #{examId}
+    </delete>
+
+</mapper>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.notification.mapper.NotificationMapper">
+
+    <!-- 分页查询通知列表 -->
+    <select id="selectPageByQuery" resultType="com.school.module.notification.entity.Notification">
+        SELECT
+            id,
+            user_id,
+            title,
+            content,
+            type,
+            is_read,
+            related_id,
+            created_at,
+            updated_at
+        FROM notification
+        WHERE deleted = 0
+        <if test="request.userId != null">
+            AND user_id = #{request.userId}
+        </if>
+        <if test="request.type != null">
+            AND type = #{request.type}
+        </if>
+        <if test="request.isRead != null">
+            AND is_read = #{request.isRead}
+        </if>
+        <if test="request.orderBy != null and request.orderBy != ''">
+            ORDER BY ${request.orderBy}
+            <if test="request.isAsc != null and request.isAsc">
+                ASC
+            </if>
+            <if test="request.isAsc == null or !request.isAsc">
+                DESC
+            </if>
+        </if>
+        <if test="request.orderBy == null or request.orderBy == ''">
+            ORDER BY created_at DESC
+        </if>
+    </select>
+
+    <!-- 获取未读通知数量 -->
+    <select id="countUnread" resultType="java.lang.Integer">
+        SELECT COUNT(*)
+        FROM notification
+        WHERE deleted = 0
+          AND user_id = #{userId}
+          AND is_read = 0
+    </select>
+
+</mapper>

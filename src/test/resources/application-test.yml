@@ -1,0 +1,47 @@
+# 测试环境配置
+spring:
+  application:
+    name: school-system-test
+
+  # 使用H2内存数据库进行测试
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    type: com.alibaba.druid.pool.DruidDataSource
+
+  # Redis配置（测试环境可以使用embedded-redis或mock）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: redis_pass_2024
+      database: 1
+
+  # Flyway配置
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+# MyBatis Plus配置
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.school: DEBUG
+
+# 应用配置
+app:
+  jwt:
+    secret: test-secret-key-for-unit-testing-only
+    expiration: 3600000
+    refresh-expiration: 86400000
+  captcha:
+    enabled: false
+    expire: 300

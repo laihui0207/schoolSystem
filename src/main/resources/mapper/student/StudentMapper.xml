@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.student.mapper.StudentMapper">
+
+    <!-- 分页查询学生列表 -->
+    <select id="selectPageByQuery" resultType="com.school.module.student.entity.Student">
+        SELECT
+            s.id,
+            s.user_id,
+            s.student_no,
+            s.school_id,
+            s.name,
+            s.gender,
+            s.birth_date,
+            s.enrollment_date,
+            s.status,
+            s.created_at,
+            s.updated_at
+        FROM student s
+        WHERE s.deleted = 0
+        <if test="request.schoolId != null">
+            AND s.school_id = #{request.schoolId}
+        </if>
+        <if test="request.studentNo != null and request.studentNo != ''">
+            AND s.student_no LIKE CONCAT('%', #{request.studentNo}, '%')
+        </if>
+        <if test="request.name != null and request.name != ''">
+            AND s.name LIKE CONCAT('%', #{request.name}, '%')
+        </if>
+        <if test="request.gender != null">
+            AND s.gender = #{request.gender}
+        </if>
+        <if test="request.status != null">
+            AND s.status = #{request.status}
+        </if>
+        <if test="request.classId != null">
+            AND EXISTS (
+                SELECT 1 FROM class_student cs
+                WHERE cs.student_id = s.id
+                AND cs.class_id = #{request.classId}
+            )
+        </if>
+        <if test="request.orderBy != null and request.orderBy != ''">
+            ORDER BY ${request.orderBy}
+            <if test="request.isAsc != null and request.isAsc">
+                ASC
+            </if>
+            <if test="request.isAsc == null or !request.isAsc">
+                DESC
+            </if>
+        </if>
+        <if test="request.orderBy == null or request.orderBy == ''">
+            ORDER BY s.created_at DESC
+        </if>
+    </select>
+
+    <!-- 根据学号查询学生 -->
+    <select id="selectByStudentNo" resultType="com.school.module.student.entity.Student">
+        SELECT
+            id,
+            user_id,
+            student_no,
+            school_id,
+            name,
+            gender,
+            birth_date,
+            enrollment_date,
+            status,
+            created_at,
+            updated_at
+        FROM student
+        WHERE deleted = 0
+          AND student_no = #{studentNo}
+        LIMIT 1
+    </select>
+
+</mapper>

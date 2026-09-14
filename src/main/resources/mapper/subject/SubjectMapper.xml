@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.subject.mapper.SubjectMapper">
+
+    <resultMap id="BaseResultMap" type="com.school.module.subject.entity.Subject">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="school_id" property="schoolId" jdbcType="BIGINT"/>
+        <result column="subject_name" property="subjectName" jdbcType="VARCHAR"/>
+        <result column="subject_code" property="subjectCode" jdbcType="VARCHAR"/>
+        <result column="full_score" property="fullScore" jdbcType="DECIMAL"/>
+        <result column="pass_score" property="passScore" jdbcType="DECIMAL"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+        <result column="deleted" property="deleted" jdbcType="SMALLINT"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, school_id, subject_name, subject_code, full_score, pass_score, created_at, updated_at, deleted
+    </sql>
+
+    <select id="selectPageByQuery" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM subject
+        WHERE deleted = 0
+        <if test="query.schoolId != null">
+            AND school_id = #{query.schoolId}
+        </if>
+        <if test="query.subjectName != null and query.subjectName != ''">
+            AND subject_name LIKE CONCAT('%', #{query.subjectName}, '%')
+        </if>
+        <if test="query.subjectCode != null and query.subjectCode != ''">
+            AND subject_code = #{query.subjectCode}
+        </if>
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectBySchoolId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM subject
+        WHERE school_id = #{schoolId}
+        AND deleted = 0
+        ORDER BY id ASC
+    </select>
+
+</mapper>

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.teacher.mapper.TeacherMapper">
+
+    <!-- 分页查询教师列表 -->
+    <select id="selectPageByQuery" resultType="com.school.module.teacher.entity.Teacher">
+        SELECT
+            t.id,
+            t.user_id,
+            t.teacher_no,
+            t.school_id,
+            t.name,
+            t.gender,
+            t.subject_id,
+            t.status,
+            t.created_at,
+            t.updated_at
+        FROM teacher t
+        WHERE t.deleted = 0
+        <if test="request.schoolId != null">
+            AND t.school_id = #{request.schoolId}
+        </if>
+        <if test="request.teacherNo != null and request.teacherNo != ''">
+            AND t.teacher_no LIKE CONCAT('%', #{request.teacherNo}, '%')
+        </if>
+        <if test="request.name != null and request.name != ''">
+            AND t.name LIKE CONCAT('%', #{request.name}, '%')
+        </if>
+        <if test="request.gender != null">
+            AND t.gender = #{request.gender}
+        </if>
+        <if test="request.subjectId != null">
+            AND t.subject_id = #{request.subjectId}
+        </if>
+        <if test="request.status != null">
+            AND t.status = #{request.status}
+        </if>
+        <if test="request.orderBy != null and request.orderBy != ''">
+            ORDER BY ${request.orderBy}
+            <if test="request.isAsc != null and request.isAsc">
+                ASC
+            </if>
+            <if test="request.isAsc == null or !request.isAsc">
+                DESC
+            </if>
+        </if>
+        <if test="request.orderBy == null or request.orderBy == ''">
+            ORDER BY t.created_at DESC
+        </if>
+    </select>
+
+    <!-- 根据工号查询教师 -->
+    <select id="selectByTeacherNo" resultType="com.school.module.teacher.entity.Teacher">
+        SELECT
+            id,
+            user_id,
+            teacher_no,
+            school_id,
+            name,
+            gender,
+            subject_id,
+            status,
+            created_at,
+            updated_at
+        FROM teacher
+        WHERE deleted = 0
+          AND teacher_no = #{teacherNo}
+        LIMIT 1
+    </select>
+
+</mapper>

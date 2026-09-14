@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.student.mapper.ClassStudentMapper">
+
+    <!-- 查询学生所在的所有班级ID -->
+    <select id="selectClassIdsByStudentId" resultType="java.lang.Long">
+        SELECT class_id
+        FROM class_student
+        WHERE student_id = #{studentId}
+    </select>
+
+    <!-- 查询班级下的所有学生ID -->
+    <select id="selectStudentIdsByClassId" resultType="java.lang.Long">
+        SELECT student_id
+        FROM class_student
+        WHERE class_id = #{classId}
+    </select>
+
+    <!-- 删除学生的所有班级关联 -->
+    <delete id="deleteByStudentId">
+        DELETE FROM class_student
+        WHERE student_id = #{studentId}
+    </delete>
+
+    <!-- 删除学生在某个班级的关联 -->
+    <delete id="deleteByStudentIdAndClassId">
+        DELETE FROM class_student
+        WHERE student_id = #{studentId}
+          AND class_id = #{classId}
+    </delete>
+
+</mapper>

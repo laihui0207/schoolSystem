@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.teacher.mapper.TeacherClassMapper">
+
+    <!-- 查询教师任教的所有(classId, subjectId)组合 -->
+    <select id="selectByTeacherId" resultType="com.school.module.teacher.entity.TeacherClass">
+        SELECT id, teacher_id, class_id, subject_id, created_at
+        FROM teacher_class
+        WHERE teacher_id = #{teacherId}
+    </select>
+
+    <!-- 查询教师担任班主任的班级ID列表 -->
+    <select id="selectHeadClassIdsByTeacherId" resultType="java.lang.Long">
+        SELECT c.id
+        FROM class c
+        WHERE c.head_teacher_id = #{teacherId}
+          AND c.deleted = 0
+    </select>
+
+</mapper>

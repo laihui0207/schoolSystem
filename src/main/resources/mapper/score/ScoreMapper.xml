@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.score.mapper.ScoreMapper">
+
+    <!-- 分页查询成绩列表 -->
+    <select id="selectPageByQuery" resultType="com.school.module.score.entity.Score">
+        SELECT
+            s.id,
+            s.exam_id,
+            s.student_id,
+            s.subject_id,
+            s.class_id,
+            s.school_id,
+            s.score,
+            s.is_absent,
+            s.rank_in_class,
+            s.rank_in_grade,
+            s.rank_in_school,
+            s.recorder_id,
+            s.status,
+            s.recorded_at,
+            s.reviewed_at,
+            s.created_at,
+            s.updated_at
+        FROM score s
+        WHERE s.deleted = 0
+        <if test="request.examId != null">
+            AND s.exam_id = #{request.examId}
+        </if>
+        <if test="request.studentId != null">
+            AND s.student_id = #{request.studentId}
+        </if>
+        <if test="request.subjectId != null">
+            AND s.subject_id = #{request.subjectId}
+        </if>
+        <if test="request.classId != null">
+            AND s.class_id = #{request.classId}
+        </if>
+        <if test="request.schoolId != null">
+            AND s.school_id = #{request.schoolId}
+        </if>
+        <if test="request.status != null">
+            AND s.status = #{request.status}
+        </if>
+        <if test="request.studentName != null and request.studentName != ''">
+            AND EXISTS (
+                SELECT 1 FROM student st
+                WHERE st.id = s.student_id
+                AND st.name LIKE CONCAT('%', #{request.studentName}, '%')
+            )
+        </if>
+        <if test="request.studentNo != null and request.studentNo != ''">
+            AND EXISTS (
+                SELECT 1 FROM student st
+                WHERE st.id = s.student_id
+                AND st.student_no LIKE CONCAT('%', #{request.studentNo}, '%')
+            )
+        </if>
+        <if test="request.orderBy != null and request.orderBy != ''">
+            ORDER BY ${request.orderBy}
+            <if test="request.isAsc != null and request.isAsc">
+                ASC
+            </if>
+            <if test="request.isAsc == null or !request.isAsc">
+                DESC
+            </if>
+        </if>
+        <if test="request.orderBy == null or request.orderBy == ''">
+            ORDER BY s.created_at DESC
+        </if>
+    </select>
+
+    <!-- 查询成绩是否已存在 -->
+    <select id="selectByExamStudentSubject" resultType="com.school.module.score.entity.Score">
+        SELECT
+            id,
+            exam_id,
+            student_id,
+            subject_id,
+            class_id,
+            school_id,
+            score,
+            is_absent,
+            rank_in_class,
+            rank_in_grade,
+            rank_in_school,
+            recorder_id,
+            status,
+            recorded_at,
+            reviewed_at,
+            created_at,
+            updated_at
+        FROM score
+        WHERE deleted = 0
+          AND exam_id = #{examId}
+          AND student_id = #{studentId}
+          AND subject_id = #{subjectId}
+        LIMIT 1
+    </select>
+
+    <!-- 批量查询某次考试的成绩 -->
+    <select id="selectByExamId" resultType="com.school.module.score.entity.Score">
+        SELECT
+            id, exam_id, student_id, subject_id, class_id, school_id,
+            score, is_absent, rank_in_class, rank_in_grade, rank_in_school,
+            recorder_id, status, recorded_at, reviewed_at, created_at, updated_at
+        FROM score
+        WHERE deleted = 0
+          AND exam_id = #{examId}
+        <if test="classId != null">
+            AND class_id = #{classId}
+        </if>
+        ORDER BY score DESC NULLS LAST
+    </select>
+
+    <!-- 审核列表：按考试+班级+科目聚合 -->
+    <select id="selectReviewList" resultType="map">
+        SELECT
+            es.id            AS id,
+            e.id             AS examId,
+            e.exam_name      AS examName,
+            sc.id            AS classId,
+            sc.class_name    AS className,
+            sub.id           AS subjectId,
+            sub.subject_name AS subjectName,
+            sub.full_score   AS fullScore,
+            MIN(s.status)    AS status,
+            COUNT(s.id)      AS enteredCount
+        FROM exam_subject es
+        JOIN exam      e   ON e.id  = es.exam_id   AND e.deleted  = 0
+        JOIN subject   sub ON sub.id = es.subject_id AND sub.deleted = 0
+        JOIN score     s   ON s.exam_id = e.id AND s.subject_id = sub.id AND s.deleted = 0
+        JOIN class     sc  ON sc.id = s.class_id   AND sc.deleted = 0
+        WHERE es.deleted = 0
+        <if test="examId != null">AND e.id = #{examId}</if>
+        <if test="classId != null">AND sc.id = #{classId}</if>
+        <if test="subjectId != null">AND sub.id = #{subjectId}</if>
+        <if test="schoolId != null">AND e.school_id = #{schoolId}</if>
+        GROUP BY es.id, e.id, e.exam_name, sc.id, sc.class_name, sub.id, sub.subject_name, sub.full_score
+        ORDER BY e.exam_date DESC, sc.class_name, sub.subject_name
+    </select>
+
+    <!-- 班级+科目的成绩列表（含学生姓名） -->
+    <select id="selectClassScoreItems" resultType="map">
+        SELECT
+            s.id, s.student_id, st.student_no, st.name AS studentName,
+            s.score, s.is_absent, s.remark, s.status
+        FROM score s
+        JOIN student st ON st.id = s.student_id AND st.deleted = 0
+        WHERE s.deleted = 0
+          AND s.exam_id = #{examId}
+          AND s.class_id = #{classId}
+        <if test="subjectId != null">AND s.subject_id = #{subjectId}</if>
+        ORDER BY st.student_no
+    </select>
+
+    <!-- 考试录入进度：按班级+科目统计 -->
+    <select id="selectExamProgress" resultType="map">
+        SELECT
+            g.id           AS gradeId,
+            g.grade_name   AS gradeName,
+            c.id           AS classId,
+            c.class_name   AS className,
+            sub.id         AS subjectId,
+            sub.subject_name AS subjectName,
+            COUNT(cs.student_id) AS totalCount,
+            COUNT(s.id)          AS enteredCount
+        FROM class c
+        JOIN grade   g   ON g.id  = c.grade_id   AND g.deleted  = 0
+        JOIN class_student cs ON cs.class_id = c.id
+        JOIN exam_subject   es ON es.exam_id = #{examId} AND es.deleted = 0
+        JOIN subject sub ON sub.id = es.subject_id AND sub.deleted = 0
+        LEFT JOIN score s ON s.exam_id = #{examId}
+                         AND s.class_id = c.id
+                         AND s.subject_id = sub.id
+                         AND s.deleted = 0
+        WHERE c.deleted = 0
+          AND EXISTS (
+              SELECT 1 FROM exam e
+              WHERE e.id = #{examId}
+                AND (FIND_IN_SET(CAST(c.grade_id AS CHAR), e.grade_ids) > 0
+                     OR e.grade_ids IS NULL)
+                AND e.school_id = c.school_id
+          )
+        GROUP BY g.id, g.grade_name, c.id, c.class_name, sub.id, sub.subject_name
+        ORDER BY g.grade_code, c.class_code, sub.subject_name
+    </select>
+
+</mapper>

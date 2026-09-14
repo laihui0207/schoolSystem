@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.school.mapper.SchoolMapper">
+
+    <resultMap id="BaseResultMap" type="com.school.module.school.entity.School">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="school_name" property="schoolName" jdbcType="VARCHAR"/>
+        <result column="school_code" property="schoolCode" jdbcType="VARCHAR"/>
+        <result column="address" property="address" jdbcType="VARCHAR"/>
+        <result column="phone" property="phone" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="SMALLINT"/>
+        <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
+        <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
+        <result column="deleted" property="deleted" jdbcType="SMALLINT"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, school_name, school_code, address, phone, status, created_at, updated_at, deleted
+    </sql>
+
+    <select id="selectPageByQuery" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM school
+        WHERE deleted = 0
+        <if test="request.schoolName != null and request.schoolName != ''">
+            AND school_name LIKE CONCAT('%', #{request.schoolName}, '%')
+        </if>
+        <if test="request.schoolCode != null and request.schoolCode != ''">
+            AND school_code = #{request.schoolCode}
+        </if>
+        <if test="request.status != null">
+            AND status = #{request.status}
+        </if>
+        ORDER BY id DESC
+    </select>
+
+</mapper>

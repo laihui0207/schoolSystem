@@ -1,0 +1,2 @@
+ALTER TABLE score ADD COLUMN IF NOT EXISTS remark VARCHAR(500);
+COMMENT ON COLUMN score.remark IS '备注';
