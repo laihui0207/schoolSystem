@@ -38,7 +38,10 @@
           <div class="message-content">
             <!-- 图表 -->
             <div v-if="msg.chartOption" class="chart-wrapper">
-              <v-chart :option="msg.chartOption" autoresize style="height:300px" />
+              <div
+                :ref="el => mountChart(el as HTMLElement | null, msg.chartOption!)"
+                style="height:300px"
+              />
             </div>
             <!-- 下载按钮 -->
             <div v-else-if="msg.downloadUrl" class="download-wrapper">
@@ -89,15 +92,8 @@
 import { ref, nextTick, onMounted } from 'vue'
 import { ChatDotRound, Delete, Close, Download } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, TitleComponent, LegendComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
+import * as echarts from 'echarts'
 import { createChatStream, getChatHistory, clearChatSession } from '@/api/chat'
-
-use([CanvasRenderer, BarChart, LineChart, PieChart, RadarChart,
-  GridComponent, TooltipComponent, TitleComponent, LegendComponent])
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -113,6 +109,13 @@ const inputText = ref('')
 const streaming = ref(false)
 const streamingContent = ref('')
 const messagesRef = ref<HTMLElement>()
+
+// ponytail: 函数式 ref 直接 init，沿用 stat/index.vue 的 echarts 用法，不引入 vue-echarts
+const mountChart = (el: HTMLElement | null, option: object) => {
+  if (!el) return
+  const inst = echarts.getInstanceByDom(el) ?? echarts.init(el)
+  inst.setOption(option as echarts.EChartsOption)
+}
 
 // ponytail: sessionId 用 timestamp 生成，够用
 const sessionId = ref(Date.now().toString())
@@ -236,7 +239,6 @@ onMounted(async () => {
     const history = await getChatHistory(sessionId.value)
     messages.value = history.map(m => ({
       role: m.role as 'user' | 'assistant',
-      content: m.content,
       timestamp: new Date(m.timestamp),
       ...parseContent(m.content)
     }))

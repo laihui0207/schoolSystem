@@ -103,11 +103,15 @@
         <router-view />
       </el-main>
     </el-container>
+
+    <!-- AI 助手（自带悬浮按钮，全局可用） -->
+    <ChatPanel />
   </el-container>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ChatPanel from '@/components/ChatPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'

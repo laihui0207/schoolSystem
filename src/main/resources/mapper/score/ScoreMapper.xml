@@ -117,15 +117,15 @@
     <select id="selectReviewList" resultType="map">
         SELECT
             es.id            AS id,
-            e.id             AS examId,
-            e.exam_name      AS examName,
-            sc.id            AS classId,
-            sc.class_name    AS className,
-            sub.id           AS subjectId,
-            sub.subject_name AS subjectName,
-            sub.full_score   AS fullScore,
+            e.id             AS "examId",
+            e.exam_name      AS "examName",
+            sc.id            AS "classId",
+            sc.class_name    AS "className",
+            sub.id           AS "subjectId",
+            sub.subject_name AS "subjectName",
+            sub.full_score   AS "fullScore",
             MIN(s.status)    AS status,
-            COUNT(s.id)      AS enteredCount
+            COUNT(s.id)      AS "enteredCount"
         FROM exam_subject es
         JOIN exam      e   ON e.id  = es.exam_id   AND e.deleted  = 0
         JOIN subject   sub ON sub.id = es.subject_id AND sub.deleted = 0
@@ -143,7 +143,7 @@
     <!-- 班级+科目的成绩列表（含学生姓名） -->
     <select id="selectClassScoreItems" resultType="map">
         SELECT
-            s.id, s.student_id, st.student_no, st.name AS studentName,
+            s.id, s.student_id, st.student_no AS "studentNo", st.name AS "studentName",
             s.score, s.is_absent, s.remark, s.status
         FROM score s
         JOIN student st ON st.id = s.student_id AND st.deleted = 0
@@ -157,14 +157,14 @@
     <!-- 考试录入进度：按班级+科目统计 -->
     <select id="selectExamProgress" resultType="map">
         SELECT
-            g.id           AS gradeId,
-            g.grade_name   AS gradeName,
-            c.id           AS classId,
-            c.class_name   AS className,
-            sub.id         AS subjectId,
-            sub.subject_name AS subjectName,
-            COUNT(cs.student_id) AS totalCount,
-            COUNT(s.id)          AS enteredCount
+            g.id           AS "gradeId",
+            g.grade_name   AS "gradeName",
+            c.id           AS "classId",
+            c.class_name   AS "className",
+            sub.id         AS "subjectId",
+            sub.subject_name AS "subjectName",
+            COUNT(cs.student_id) AS "totalCount",
+            COUNT(s.id)          AS "enteredCount"
         FROM class c
         JOIN grade   g   ON g.id  = c.grade_id   AND g.deleted  = 0
         JOIN class_student cs ON cs.class_id = c.id
@@ -178,8 +178,8 @@
           AND EXISTS (
               SELECT 1 FROM exam e
               WHERE e.id = #{examId}
-                AND (FIND_IN_SET(CAST(c.grade_id AS CHAR), e.grade_ids) > 0
-                     OR e.grade_ids IS NULL)
+                AND (c.grade_id = ANY(string_to_array(e.grade_ids, ',')::bigint[])
+                     OR e.grade_ids IS NULL OR e.grade_ids = '')
                 AND e.school_id = c.school_id
           )
         GROUP BY g.id, g.grade_name, c.id, c.class_name, sub.id, sub.subject_name

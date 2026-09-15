@@ -23,7 +23,7 @@
           <el-select
             v-model="selectedClassId"
             placeholder="请先选择考试"
-            style="width="200px""
+            style="width: 200px"
             clearable
             :disabled="!selectedExamId"
             @change="onClassChange"
