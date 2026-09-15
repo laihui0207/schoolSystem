@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.result.Result;
 import com.school.module.scorechange.dto.*;
 import com.school.module.scorechange.service.ScoreChangeService;
+import com.school.security.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -25,9 +26,8 @@ public class ScoreChangeController {
      */
     @PostMapping("/apply")
     public Result<ScoreChangeLogResponse> applyScoreChange(
-            @Valid @RequestBody ScoreChangeApplyRequest request,
-            @RequestParam Long applicantId) {
-        ScoreChangeLogResponse response = scoreChangeService.applyScoreChange(request, applicantId);
+            @Valid @RequestBody ScoreChangeApplyRequest request) {
+        ScoreChangeLogResponse response = scoreChangeService.applyScoreChange(request, SecurityUtils.currentUserId());
         return Result.success(response);
     }
 
@@ -36,9 +36,8 @@ public class ScoreChangeController {
      */
     @PostMapping("/approve")
     public Result<Void> approveScoreChange(
-            @Valid @RequestBody ScoreChangeApproveRequest request,
-            @RequestParam Long approverId) {
-        scoreChangeService.approveScoreChange(request, approverId);
+            @Valid @RequestBody ScoreChangeApproveRequest request) {
+        scoreChangeService.approveScoreChange(request, SecurityUtils.currentUserId());
         return Result.success();
     }
 
@@ -64,10 +63,8 @@ public class ScoreChangeController {
      * 撤销申请
      */
     @DeleteMapping("/{id}/cancel")
-    public Result<Void> cancelApply(
-            @PathVariable Long id,
-            @RequestParam Long applicantId) {
-        scoreChangeService.cancelApply(id, applicantId);
+    public Result<Void> cancelApply(@PathVariable Long id) {
+        scoreChangeService.cancelApply(id, SecurityUtils.currentUserId());
         return Result.success();
     }
 

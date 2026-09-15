@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '学校管理', icon: 'School' }
       },
       {
+        path: 'term',
+        name: 'Term',
+        component: () => import('@/views/term/index.vue'),
+        meta: { title: '学期管理', icon: 'Calendar' }
+      },
+      {
         path: 'exam',
         name: 'Exam',
         component: () => import('@/views/exam/index.vue'),
@@ -49,6 +55,72 @@ const routes: RouteRecordRaw[] = [
         name: 'System',
         component: () => import('@/views/system/index.vue'),
         meta: { title: '系统管理', icon: 'Setting' }
+      },
+      {
+        path: 'student',
+        name: 'Student',
+        component: () => import('@/views/student/index.vue'),
+        meta: { title: '学生管理', icon: 'User' }
+      },
+      {
+        path: 'teacher',
+        name: 'Teacher',
+        component: () => import('@/views/teacher/index.vue'),
+        meta: { title: '教师管理', icon: 'Avatar' }
+      },
+      {
+        path: 'class',
+        name: 'Class',
+        component: () => import('@/views/class/index.vue'),
+        meta: { title: '班级管理', icon: 'Grid' }
+      },
+      {
+        path: 'subject',
+        name: 'Subject',
+        component: () => import('@/views/subject/index.vue'),
+        meta: { title: '科目管理', icon: 'Collection' }
+      },
+      {
+        path: 'grade',
+        name: 'Grade',
+        component: () => import('@/views/grade/index.vue'),
+        meta: { title: '年级管理', icon: 'Grid' }
+      },
+      {
+        path: 'score/query',
+        name: 'ScoreQuery',
+        component: () => import('@/views/score/query.vue'),
+        meta: { title: '成绩查询', icon: 'Search' }
+      },
+      {
+        path: 'score/analysis',
+        name: 'ScoreAnalysis',
+        component: () => import('@/views/score/analysis.vue'),
+        meta: { title: '成绩分析', icon: 'DataAnalysis' }
+      },
+      {
+        path: 'score/score-change',
+        name: 'ScoreChange',
+        component: () => import('@/views/score/score-change.vue'),
+        meta: { title: '成绩变更', icon: 'Edit' }
+      },
+      {
+        path: 'system/config',
+        name: 'SystemConfig',
+        component: () => import('@/views/system/config.vue'),
+        meta: { title: '系统配置', icon: 'Setting' }
+      },
+      {
+        path: 'notification',
+        name: 'Notification',
+        component: () => import('@/views/notification/index.vue'),
+        meta: { title: '通知管理', icon: 'Bell' }
+      },
+      {
+        path: 'warning',
+        name: 'Warning',
+        component: () => import('@/views/warning/index.vue'),
+        meta: { title: '成绩预警', icon: 'Warning' }
       }
     ]
   }

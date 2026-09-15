@@ -102,6 +102,19 @@ public class SchoolServiceImpl implements SchoolService {
         schoolMapper.deleteById(id);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatus(Long id, Integer status) {
+        School existing = schoolMapper.selectById(id);
+        if (existing == null) {
+            throw new BusinessException("学校不存在");
+        }
+        School updated = new School();
+        updated.setId(id);
+        updated.setStatus(status);
+        schoolMapper.updateById(updated);
+    }
+
     private SchoolResponse toResponse(School school) {
         return SchoolResponse.builder()
                 .id(school.getId())

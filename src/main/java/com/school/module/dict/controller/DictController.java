@@ -22,6 +22,14 @@ public class DictController {
     private final DictService dictService;
 
     /**
+     * 查询所有字典类型
+     */
+    @GetMapping("/type")
+    public Result<List<DictType>> getDictTypeList() {
+        return Result.success(dictService.list());
+    }
+
+    /**
      * 根据字典类型查询字典数据
      */
     @GetMapping("/data/{dictType}")

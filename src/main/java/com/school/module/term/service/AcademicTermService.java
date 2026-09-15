@@ -25,4 +25,6 @@ public interface AcademicTermService {
 
     void delete(Long id);
 
+    void endTerm(Long id);
+
 }

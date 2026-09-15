@@ -56,6 +56,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getScoreStatistics, getScoreDistribution } from '@/api/score'
 import { getExamList } from '@/api/exam'
 import { getAllSubjects } from '@/api/subject'
@@ -109,6 +110,8 @@ const loadAnalysis = async () => {
     ])
     stats.value = s
     distribution.value = (d as any[]) ?? []
+  } catch {
+    ElMessage.error('加载失败，请重试')
   } finally {
     loading.value = false
   }

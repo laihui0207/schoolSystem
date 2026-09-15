@@ -47,7 +47,6 @@ service.interceptors.response.use(
           ElMessage.error('未授权，请重新登录')
           const userStore = useUserStore()
           userStore.logout()
-          router.push('/login')
           break
         case 403:
           ElMessage.error('拒绝访问')

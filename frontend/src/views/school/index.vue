@@ -229,12 +229,13 @@ const handleDelete = (row: School) => {
 }
 
 const handleStatusChange = async (row: School) => {
+  const oldStatus = row.status === 1 ? 0 : 1
   try {
     await updateSchoolStatus(row.id!, row.status)
     ElMessage.success('状态更新成功')
   } catch (error) {
     console.error('状态更新失败', error)
-    row.status = row.status === 0 ? 1 : 0
+    row.status = oldStatus
   }
 }
 

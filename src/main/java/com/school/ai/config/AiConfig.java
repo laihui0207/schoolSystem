@@ -26,21 +26,19 @@ public class AiConfig {
     @Bean
     @Primary
     public ChatModel activeChatModel(
-            @Autowired(required = false) @Qualifier("deepSeekChatModel") ChatModel deepSeekModel,
+            @Autowired(required = false) @Qualifier("openAiChatModel") ChatModel openAiModel,
             @Autowired(required = false) @Qualifier("ollamaChatModel") ChatModel ollamaModel) {
         if ("ollama".equalsIgnoreCase(aiProvider)) {
             if (ollamaModel == null) {
                 throw new IllegalStateException(
-                        "AI provider is 'ollama' but OllamaChatModel is not available. " +
-                        "Check spring.ai.ollama.base-url and that the model is pulled.");
+                        "AI provider is 'ollama' but OllamaChatModel is not available.");
             }
             return ollamaModel;
         }
-        if (deepSeekModel == null) {
-            throw new IllegalStateException(
-                    "AI provider is 'deepseek' but DeepSeekChatModel is not available. " +
-                    "Check spring.ai.deepseek.api-key.");
-        }
-        return deepSeekModel;
+        // deepseek uses OpenAI-compatible API via spring-ai-openai-starter
+        if (openAiModel != null) return openAiModel;
+        if (ollamaModel != null) return ollamaModel;
+        throw new IllegalStateException(
+                "No ChatModel available. Configure spring.ai.openai.api-key or spring.ai.ollama.base-url.");
     }
 }

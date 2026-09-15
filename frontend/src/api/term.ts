@@ -135,6 +135,16 @@ export const endTerm = (id: number) => {
 }
 
 /**
+ * 删除学期
+ */
+export const deleteTerm = (id: number) => {
+  return request({
+    url: `/terms/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
  * 获取所有学期列表（用于下拉选择）
  *
  * ponytail: 后端没有 /all 端点，借分页接口取大页；学期量级到千级再让后端加不分页端点

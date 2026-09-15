@@ -6,6 +6,7 @@ import com.school.module.notification.dto.NotificationCreateRequest;
 import com.school.module.notification.dto.NotificationQueryRequest;
 import com.school.module.notification.dto.NotificationResponse;
 import com.school.module.notification.service.NotificationService;
+import com.school.security.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -72,9 +73,9 @@ public class NotificationController {
     /**
      * 标记全部为已读
      */
-    @PatchMapping("/user/{userId}/read-all")
-    public Result<Void> markAllAsRead(@PathVariable Long userId) {
-        notificationService.markAllAsRead(userId);
+    @PatchMapping("/read-all")
+    public Result<Void> markAllAsRead() {
+        notificationService.markAllAsRead(SecurityUtils.currentUserId());
         return Result.success();
     }
 
@@ -90,9 +91,9 @@ public class NotificationController {
     /**
      * 获取未读通知数量
      */
-    @GetMapping("/user/{userId}/unread-count")
-    public Result<Integer> getUnreadCount(@PathVariable Long userId) {
-        Integer count = notificationService.getUnreadCount(userId);
+    @GetMapping("/unread-count")
+    public Result<Integer> getUnreadCount() {
+        Integer count = notificationService.getUnreadCount(SecurityUtils.currentUserId());
         return Result.success(count);
     }
 

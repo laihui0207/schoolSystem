@@ -3,11 +3,30 @@ import request from '@/utils/request'
 export interface LoginParams {
   username: string
   password: string
+  captcha: string
+  captchaKey: string
 }
 
 export interface LoginResponse {
-  token: string
+  accessToken: string
+  refreshToken: string
   userInfo: any
+}
+
+export interface CaptchaResponse {
+  captchaKey: string
+  captchaImage: string
+  expiresIn: number
+}
+
+/**
+ * 获取验证码
+ */
+export const getCaptcha = () => {
+  return request<CaptchaResponse>({
+    url: '/auth/captcha',
+    method: 'get'
+  })
 }
 
 /**

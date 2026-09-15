@@ -146,7 +146,7 @@ const handleSearch = () => { pagination.pageNum = 1; loadList() }
 const handleReset = () => { queryForm.status = undefined; pagination.pageNum = 1; loadList() }
 
 const handleCancel = async (row: ScoreChangeLog) => {
-  await ElMessageBox.confirm('确定要撤销该变更申请？', '撤销确认', { type: 'warning' })
+  await ElMessageBox.confirm('确定要撤销该变更申请？', '撤销确认', { type: 'warning' }).catch(() => {})
   try {
     await cancelScoreChange(row.id, userInfo.value!.id)
     ElMessage.success('撤销成功')

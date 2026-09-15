@@ -117,6 +117,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { School, UserFilled, Reading, Document, EditPen, DataAnalysis, User } from '@element-plus/icons-vue'
+import { getSchoolList } from '@/api/school'
+import { getStudentList } from '@/api/student'
+import { getTeacherList } from '@/api/teacher'
 
 const router = useRouter()
 
@@ -157,17 +160,15 @@ const viewExam = (exam: any) => {
   router.push(`/exam/${exam.id}`)
 }
 
-onMounted(() => {
-  // TODO: 加载统计数据
-  stats.value = {
-    schoolCount: 5,
-    studentCount: 1250,
-    examCount: 48,
-    scoreCount: 15600
-  }
-
-  // TODO: 加载最近考试
-  recentExams.value = []
+onMounted(async () => {
+  const results = await Promise.allSettled([
+    getSchoolList({ pageNum: 1, pageSize: 1 }),
+    getStudentList({ pageNum: 1, pageSize: 1 }),
+    getTeacherList({ pageNum: 1, pageSize: 1 })
+  ])
+  if (results[0].status === 'fulfilled') stats.value.schoolCount = (results[0].value as any)?.total ?? 0
+  if (results[1].status === 'fulfilled') stats.value.studentCount = (results[1].value as any)?.total ?? 0
+  if (results[2].status === 'fulfilled') stats.value.examCount = (results[2].value as any)?.total ?? 0
 })
 </script>
 

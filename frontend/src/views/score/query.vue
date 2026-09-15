@@ -28,6 +28,7 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button type="success" :loading="exporting" :disabled="!query.examId" @click="handleExport">导出 Excel</el-button>
         </el-form-item>
       </el-form>
 
@@ -66,10 +67,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getScoreList } from '@/api/score'
 import { getExamList } from '@/api/exam'
 import { getAllSubjects } from '@/api/subject'
 import { getClassList } from '@/api/class'
+import { exportScores } from '@/api/export'
 
 const loading = ref(false)
 const list = ref<any[]>([])
@@ -111,6 +114,21 @@ const onExamChange = async (examId: number) => {
 const handleSearch = () => {
   query.pageNum = 1
   loadData()
+}
+
+const exporting = ref(false)
+
+const handleExport = async () => {
+  if (!query.examId) return
+  exporting.value = true
+  try {
+    await exportScores({ examId: query.examId, classId: query.classId })
+    ElMessage.success('导出成功')
+  } catch {
+    ElMessage.error('导出失败')
+  } finally {
+    exporting.value = false
+  }
 }
 
 const handleReset = () => {

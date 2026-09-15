@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * @since 2024-01-01
  */
 @SpringBootApplication
-@MapperScan("com.school.module.*.mapper")
+@MapperScan("com.school.module.**.mapper")
 @EnableCaching
 @EnableAsync
 public class SchoolSystemApplication {

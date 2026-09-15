@@ -21,40 +21,47 @@
         <el-sub-menu index="basic">
           <template #title>
             <el-icon><School /></el-icon>
-            <span>基础管理</span>
+            <span>基础数据</span>
           </template>
           <el-menu-item index="/school">学校管理</el-menu-item>
-          <el-menu-item index="/term">学期管理</el-menu-item>
-          <el-menu-item index="/grade">年级管理</el-menu-item>
-          <el-menu-item index="/class">班级管理</el-menu-item>
-          <el-menu-item index="/subject">科目管理</el-menu-item>
           <el-menu-item index="/student">学生管理</el-menu-item>
           <el-menu-item index="/teacher">教师管理</el-menu-item>
+          <el-menu-item index="/subject">科目管理</el-menu-item>
         </el-sub-menu>
 
-        <el-menu-item index="/exam">
-          <el-icon><Reading /></el-icon>
-          <template #title>考试管理</template>
-        </el-menu-item>
-
-        <el-menu-item index="/score">
-          <el-icon><Document /></el-icon>
-          <template #title>成绩管理</template>
-        </el-menu-item>
+        <el-sub-menu index="exam-score">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>考试与成绩</span>
+          </template>
+          <el-menu-item index="/exam">考试管理</el-menu-item>
+          <el-menu-item index="/score">成绩录入</el-menu-item>
+          <el-menu-item index="/score/query">成绩查询</el-menu-item>
+          <el-menu-item index="/score/analysis">成绩分析</el-menu-item>
+          <el-menu-item index="/score/score-change">成绩变更</el-menu-item>
+        </el-sub-menu>
 
         <el-menu-item index="/stat">
           <el-icon><DataAnalysis /></el-icon>
           <template #title>统计分析</template>
         </el-menu-item>
 
+        <el-sub-menu index="message">
+          <template #title>
+            <el-icon><Bell /></el-icon>
+            <span>消息中心</span>
+          </template>
+          <el-menu-item index="/notification">通知管理</el-menu-item>
+          <el-menu-item index="/warning">成绩预警</el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系统管理</span>
           </template>
-          <el-menu-item index="/dict">数据字典</el-menu-item>
-          <el-menu-item index="/config">系统配置</el-menu-item>
-          <el-menu-item index="/notification">通知管理</el-menu-item>
+          <el-menu-item index="/system">系统管理</el-menu-item>
+          <el-menu-item index="/system/config">系统配置</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -107,7 +114,6 @@ import { useUserStore } from '@/stores/user'
 import {
   HomeFilled,
   School,
-  Reading,
   Document,
   DataAnalysis,
   Setting,

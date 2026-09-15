@@ -116,6 +116,19 @@ public class AcademicTermServiceImpl implements AcademicTermService {
         academicTermMapper.deleteById(id);
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void endTerm(Long id) {
+        AcademicTerm existing = academicTermMapper.selectById(id);
+        if (existing == null) {
+            throw new BusinessException("学期不存在");
+        }
+        AcademicTerm updated = new AcademicTerm();
+        updated.setId(id);
+        updated.setStatus(0);
+        academicTermMapper.updateById(updated);
+    }
+
     private AcademicTermResponse toResponse(AcademicTerm term) {
         return AcademicTermResponse.builder()
                 .id(term.getId())

@@ -5,15 +5,16 @@ import router from '@/router'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem('token') || '')
-  const userInfo = ref<any>(null)
+  const userInfo = ref<any>(JSON.parse(localStorage.getItem('userInfo') || 'null'))
 
   // 登录
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, captcha: string, captchaKey: string) => {
     try {
-      const data = await loginApi({ username, password })
-      token.value = data.token
+      const data = await loginApi({ username, password, captcha, captchaKey })
+      token.value = data.accessToken
       userInfo.value = data.userInfo
-      localStorage.setItem('token', data.token)
+      localStorage.setItem('token', data.accessToken)
+      localStorage.setItem('userInfo', JSON.stringify(data.userInfo))
       return data
     } catch (error) {
       throw error
@@ -30,6 +31,7 @@ export const useUserStore = defineStore('user', () => {
       token.value = ''
       userInfo.value = null
       localStorage.removeItem('token')
+      localStorage.removeItem('userInfo')
       router.push('/login')
     }
   }

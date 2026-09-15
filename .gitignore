@@ -39,3 +39,6 @@ docker/data/
 
 # ===== Claude Code =====
 .claude/
+
+# ===== Planning docs =====
+*-plan.md

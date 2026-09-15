@@ -49,4 +49,10 @@ public class AcademicTermController {
         return Result.success(academicTermService.queryTerms(request));
     }
 
+    @PatchMapping("/{id}/end")
+    public Result<Void> endTerm(@PathVariable Long id) {
+        academicTermService.endTerm(id);
+        return Result.success();
+    }
+
 }

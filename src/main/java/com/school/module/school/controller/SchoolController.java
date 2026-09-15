@@ -49,4 +49,10 @@ public class SchoolController {
         return Result.success(schoolService.listSchools(request));
     }
 
+    @PatchMapping("/{id}/status")
+    public Result<Void> updateStatus(@PathVariable Long id, @RequestParam Integer status) {
+        schoolService.updateStatus(id, status);
+        return Result.success();
+    }
+
 }

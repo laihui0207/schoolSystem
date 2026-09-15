@@ -22,4 +22,6 @@ public interface SchoolService {
 
     void delete(Long id);
 
+    void updateStatus(Long id, Integer status);
+
 }

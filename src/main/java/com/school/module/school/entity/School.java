@@ -1,6 +1,7 @@
 package com.school.module.school.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.school.common.base.BaseEntity;
@@ -32,6 +33,7 @@ public class School extends BaseEntity {
     private String address;
 
     /** 联系电话 */
+    @TableField("contact_phone")
     private String phone;
 
     /** 状态：0-禁用，1-启用 */

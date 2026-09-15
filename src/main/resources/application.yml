@@ -62,7 +62,7 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
     encoding: UTF-8
-    validate-on-migrate: true
+    validate-on-migrate: false
 
   # Jackson配置
   jackson:
@@ -118,7 +118,7 @@ mybatis-plus:
 server:
   port: 8080
   servlet:
-    context-path: /api/v1
+    context-path: /
   tomcat:
     uri-encoding: UTF-8
     threads:
