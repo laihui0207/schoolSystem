@@ -1,5 +1,6 @@
 package com.school.module.export.service;
 
+import com.school.module.score.dto.BatchInputResult;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,14 +29,14 @@ public interface ExportService {
     void downloadScoreTemplate(HttpServletResponse response);
 
     /**
-     * 导入成绩Excel
+     * 导入成绩Excel（按 考试/班级/科目 三元组，学校ID取自学生档案）
      *
      * @param examId 考试ID
      * @param classId 班级ID
-     * @param schoolId 学校ID
+     * @param subjectId 科目ID
      * @param file Excel文件
-     * @return 导入成功的数量
+     * @return 成功/失败条数与逐条失败原因
      */
-    Integer importScores(Long examId, Long classId, Long schoolId, MultipartFile file);
+    BatchInputResult importScores(Long examId, Long classId, Long subjectId, MultipartFile file);
 
 }

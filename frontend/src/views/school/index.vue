@@ -13,8 +13,8 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-            <el-option label="正常" :value="0" />
-            <el-option label="停用" :value="1" />
+            <el-option label="启用" :value="1" />
+            <el-option label="禁用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -42,20 +42,17 @@
           <template #default="{ row }">
             <el-switch
               v-model="row.status"
-              :active-value="0"
-              :inactive-value="1"
-              @change="handleStatusChange(row)"
+              :active-value="1"
+              :inactive-value="0"
+              @change="handleStatusChange(row as School)"
             />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
+            <el-button link type="primary" :icon="Edit" @click="handleEdit(row as School)">
               编辑
-            </el-button>
-            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)">
-              删除
             </el-button>
           </template>
         </el-table-column>
@@ -69,7 +66,7 @@
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="handleSearch"
-        @current-change="handleSearch"
+        @current-change="loadData"
         style="margin-top: 20px"
       />
     </el-card>
@@ -104,8 +101,8 @@
         </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="form.status">
-            <el-radio :label="0">正常</el-radio>
-            <el-radio :label="1">停用</el-radio>
+            <el-radio :label="1">启用</el-radio>
+            <el-radio :label="0">禁用</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
@@ -121,17 +118,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Search, Refresh, Plus, Edit } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getSchoolList,
   createSchool,
   updateSchool,
-  deleteSchool,
   updateSchoolStatus,
   type School
 } from '@/api/school'
+import { handleError } from '@/utils/errorHandler'
+import type { PageResponse } from '@/types/common'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -152,15 +150,17 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('')
 const formRef = ref<FormInstance>()
 
-const form = reactive<School>({
+const defaultForm = (): School => ({
   id: undefined,
   schoolName: '',
   schoolCode: '',
   address: '',
   contactPhone: '',
   contactPerson: '',
-  status: 0
+  status: 1
 })
+
+const form = reactive<School>(defaultForm())
 
 const rules: FormRules = {
   schoolName: [
@@ -179,11 +179,11 @@ const loadData = async () => {
       pageNum: pagination.pageNum,
       pageSize: pagination.pageSize
     }
-    const res: any = await getSchoolList(params)
+    const res = await getSchoolList(params) as PageResponse<School>
     tableData.value = res.records || []
     pagination.total = res.total || 0
   } catch (error) {
-    console.error('加载数据失败', error)
+    handleError(error, '加载数据失败')
   } finally {
     loading.value = false
   }
@@ -208,34 +208,33 @@ const handleAdd = () => {
 
 const handleEdit = (row: School) => {
   dialogTitle.value = '编辑学校'
-  Object.assign(form, row)
+  Object.assign(form, JSON.parse(JSON.stringify(row)))
   dialogVisible.value = true
 }
 
-const handleDelete = (row: School) => {
-  ElMessageBox.confirm('确定要删除这条记录吗？', '提示', {
-    type: 'warning',
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  }).then(async () => {
-    try {
-      await deleteSchool(row.id!)
-      ElMessage.success('删除成功')
-      loadData()
-    } catch (error) {
-      console.error('删除失败', error)
-    }
-  })
-}
+
 
 const handleStatusChange = async (row: School) => {
-  const oldStatus = row.status === 1 ? 0 : 1
+  const previousStatus = row.status
   try {
     await updateSchoolStatus(row.id!, row.status)
     ElMessage.success('状态更新成功')
   } catch (error) {
-    console.error('状态更新失败', error)
-    row.status = oldStatus
+    handleError(error, '状态更新失败')
+    row.status = previousStatus
+  }
+}
+
+/**
+ * 可选字段的空字符串转 undefined（JSON 序列化时省略），不改原表单对象
+ */
+const normalizeSchoolForm = (source: School): School => {
+  const blankToUndefined = (v?: string) => (v && v.trim() ? v.trim() : undefined)
+  return {
+    ...source,
+    address: blankToUndefined(source.address),
+    contactPhone: blankToUndefined(source.contactPhone),
+    contactPerson: blankToUndefined(source.contactPerson)
   }
 }
 
@@ -246,17 +245,19 @@ const handleSubmit = async () => {
     if (valid) {
       submitLoading.value = true
       try {
+        // ponytail: G-6 — 表单默认值是空字符串，直接提交会让后端 @Pattern(contactPhone) 等校验把 '' 判为格式错误；空串字段转 undefined 不发
+        const payload = normalizeSchoolForm(form)
         if (form.id) {
-          await updateSchool(form.id, form)
+          await updateSchool(form.id, payload)
           ElMessage.success('更新成功')
         } else {
-          await createSchool(form)
+          await createSchool(payload)
           ElMessage.success('创建成功')
         }
         dialogVisible.value = false
         loadData()
       } catch (error) {
-        console.error('提交失败', error)
+        handleError(error, '提交失败')
       } finally {
         submitLoading.value = false
       }
@@ -270,13 +271,7 @@ const handleDialogClose = () => {
 }
 
 const resetForm = () => {
-  form.id = undefined
-  form.schoolName = ''
-  form.schoolCode = ''
-  form.address = ''
-  form.contactPhone = ''
-  form.contactPerson = ''
-  form.status = 0
+  Object.assign(form, defaultForm())
 }
 
 onMounted(() => {

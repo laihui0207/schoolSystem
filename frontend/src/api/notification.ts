@@ -4,8 +4,12 @@ export interface Notification {
   id?: number
   title: string
   content: string
-  type: string
+  /** 1-成绩发布 2-成绩预警 3-系统通知（后端 Notification.type 为 Integer） */
+  // ponytail: 后端实体与 NotificationResponse.type 都是 Integer，string 会让 typeTagMap 命中失败
+  type: number
   userId?: number
+  /** 关联业务 id（如考试 id），对应 NotificationResponse.relatedId */
+  relatedId?: number
 }
 
 export interface NotificationQuery {
@@ -72,7 +76,7 @@ export const markAllAsRead = () => {
  * 获取未读数量
  */
 export const getUnreadCount = () => {
-  return request({
+  return request<number>({
     url: '/notifications/unread-count',
     method: 'get'
   })

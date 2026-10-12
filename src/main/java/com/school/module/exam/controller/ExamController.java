@@ -10,6 +10,7 @@ import com.school.module.exam.dto.ExamUpdateRequest;
 import com.school.module.exam.service.ExamService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -18,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/exams")
+@RequestMapping("/exams")
 @RequiredArgsConstructor
 public class ExamController {
 
@@ -28,6 +29,7 @@ public class ExamController {
      * 创建考试
      */
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER')")
     public Result<ExamResponse> createExam(@Valid @RequestBody ExamCreateRequest request) {
         ExamResponse response = examService.createExam(request);
         return Result.success(response);
@@ -46,6 +48,7 @@ public class ExamController {
      * 更新考试信息
      */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER')")
     public Result<ExamResponse> updateExam(
             @PathVariable Long id,
             @Valid @RequestBody ExamUpdateRequest request) {
@@ -57,6 +60,8 @@ public class ExamController {
      * 更新考试状态
      */
     @PatchMapping("/{id}/status")
+    // ponytail: 直接改状态是绕过 start-input/submit-review/publish 的后门，只留给管理员（含回退一步）
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
     public Result<Void> updateExamStatus(
             @PathVariable Long id,
             @RequestParam Integer status) {
@@ -68,6 +73,7 @@ public class ExamController {
      * 删除考试
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
     public Result<Void> deleteExam(@PathVariable Long id) {
         examService.deleteExam(id);
         return Result.success();
@@ -86,6 +92,7 @@ public class ExamController {
      * 开始成绩录入
      */
     @PostMapping("/{id}/start-input")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER')")
     public Result<Void> startScoreInput(@PathVariable Long id) {
         examService.startScoreInput(id);
         return Result.success();
@@ -95,6 +102,7 @@ public class ExamController {
      * 提交审核
      */
     @PostMapping("/{id}/submit-review")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER')")
     public Result<Void> submitForReview(@PathVariable Long id) {
         examService.submitForReview(id);
         return Result.success();
@@ -104,11 +112,16 @@ public class ExamController {
      * 发布考试成绩
      */
     @PostMapping("/{id}/publish")
+    // ponytail: 发布会触发排名回写、通知与预警，任课老师不应有此权限；与 delete/status 同为管理员专属
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
     public Result<Void> publishExam(@PathVariable Long id) {
         examService.publishExam(id);
         return Result.success();
     }
 
+    /**
+     * 获取录入进度
+     */
     @GetMapping("/{id}/progress")
     public Result<ExamProgressResponse> getExamProgress(@PathVariable Long id) {
         return Result.success(examService.getExamProgress(id));

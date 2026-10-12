@@ -78,6 +78,22 @@ public class Score extends BaseEntity {
      */
     private Integer rankInSchool;
 
+    // ponytail: 契约 R——总分名次独立三列，rank_in_* 只表示该行所属科目的单科名次，不再被总分轮覆盖
+    /**
+     * 总分班级排名（同一学生同场考试所有行相同）
+     */
+    private Integer totalRankInClass;
+
+    /**
+     * 总分年级排名（同一学生同场考试所有行相同）
+     */
+    private Integer totalRankInGrade;
+
+    /**
+     * 总分校级排名（同一学生同场考试所有行相同）
+     */
+    private Integer totalRankInSchool;
+
     /**
      * 录入人ID
      */
@@ -97,5 +113,10 @@ public class Score extends BaseEntity {
      * 审核时间
      */
     private LocalDateTime reviewedAt;
+
+    /**
+     * 备注
+     */
+    private String remark;
 
 }

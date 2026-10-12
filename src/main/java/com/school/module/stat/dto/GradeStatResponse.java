@@ -70,9 +70,10 @@ public class GradeStatResponse {
      */
     private List<ClassComparison> classComparisons;
 
-    public List<ClassComparison> getClassStats() {
-        return classComparisons;
-    }
+    /**
+     * 各年级对比（按班级所属年级归并）
+     */
+    private List<GradeStat> gradeStats;
 
     /**
      * 各科目统计
@@ -88,9 +89,22 @@ public class GradeStatResponse {
         private Long classId;
         private String className;
         private BigDecimal averageScore;
+        private BigDecimal maxScore;
+        private BigDecimal minScore;
         private BigDecimal passRate;
         private BigDecimal excellentRate;
         private Integer rank;
+    }
+
+    /**
+     * 年级对比
+     */
+    @Data
+    @Builder
+    public static class GradeStat {
+        private Long gradeId;
+        private String gradeName;
+        private BigDecimal averageScore;
     }
 
     /**
@@ -107,3 +121,4 @@ public class GradeStatResponse {
     }
 
 }
+

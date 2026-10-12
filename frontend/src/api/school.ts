@@ -61,17 +61,10 @@ export const updateSchool = (id: number, data: School) => {
 }
 
 /**
- * 删除学校
- */
-export const deleteSchool = (id: number) => {
-  return request({
-    url: `/schools/${id}`,
-    method: 'delete'
-  })
-}
-
-/**
  * 更新学校状态
+ *
+ * ponytail: 学校被年级/班级/学生/成绩大量外键引用，后端刻意不提供删除，
+ * 停用（status=0）即为业务上的「移除」
  */
 export const updateSchoolStatus = (id: number, status: number) => {
   return request({

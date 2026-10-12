@@ -3,21 +3,30 @@ spring:
   application:
     name: school-system-test
 
-  # 使用H2内存数据库进行测试
+  # 集成测试跑真 Postgres（迁移脚本是 PG 方言，H2 无法执行 V3 的表达式唯一索引）。
+  # 指向本地 Docker 的专用测试库 school_system_test，Flyway 会在其上建表。
+  # ponytail: 复用本地 Docker PG；有 Maven Central 网络后可换 Testcontainers 做临时容器隔离。
+  # 连接池用 Hikari（Druid 在测试上下文有兼容问题）。
   datasource:
-    driver-class-name: org.h2.Driver
-    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
-    username: sa
-    password:
-    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/school_system_test
+    username: school_admin
+    password: school_pass_2024
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
 
-  # Redis配置（测试环境可以使用embedded-redis或mock）
+  # 集成测试连本地 Docker Redis（app 的 RedisConfig/JwtAuthenticationFilter 硬依赖 Redis，排除不掉）。
+  # 用 database: 1 与开发环境(db 0)隔离键空间。
   data:
     redis:
       host: localhost
       port: 6379
       password: redis_pass_2024
       database: 1
+      timeout: 10000ms
 
   # Flyway配置
   flyway:

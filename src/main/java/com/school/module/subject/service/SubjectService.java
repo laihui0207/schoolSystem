@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.module.subject.dto.SubjectCreateRequest;
 import com.school.module.subject.dto.SubjectQueryRequest;
 import com.school.module.subject.dto.SubjectResponse;
+import com.school.module.subject.dto.SubjectUpdateRequest;
 
 import java.util.List;
 
@@ -22,7 +23,7 @@ public interface SubjectService {
 
     SubjectResponse create(SubjectCreateRequest req);
 
-    SubjectResponse update(Long id, SubjectCreateRequest req);
+    SubjectResponse update(Long id, SubjectUpdateRequest req);
 
     void delete(Long id);
 

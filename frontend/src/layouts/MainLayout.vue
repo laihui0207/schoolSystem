@@ -18,33 +18,51 @@
           <template #title>首页</template>
         </el-menu-item>
 
-        <el-sub-menu index="basic">
+        <el-sub-menu v-if="isAdmin" index="basic">
           <template #title>
             <el-icon><School /></el-icon>
-            <span>基础数据</span>
+            <span>基础管理</span>
           </template>
           <el-menu-item index="/school">学校管理</el-menu-item>
+          <el-menu-item index="/term">学期管理</el-menu-item>
+          <el-menu-item index="/grade">年级管理</el-menu-item>
+          <el-menu-item index="/class">班级管理</el-menu-item>
+          <el-menu-item index="/subject">科目管理</el-menu-item>
           <el-menu-item index="/student">学生管理</el-menu-item>
           <el-menu-item index="/teacher">教师管理</el-menu-item>
-          <el-menu-item index="/subject">科目管理</el-menu-item>
         </el-sub-menu>
 
-        <el-sub-menu index="exam-score">
+        <el-sub-menu v-if="isAdmin || isTeacher" index="exam-score">
           <template #title>
             <el-icon><Document /></el-icon>
             <span>考试与成绩</span>
           </template>
           <el-menu-item index="/exam">考试管理</el-menu-item>
-          <el-menu-item index="/score">成绩录入</el-menu-item>
+          <el-menu-item index="/score">成绩管理</el-menu-item>
+          <el-menu-item index="/score/input">成绩录入</el-menu-item>
+          <el-menu-item index="/score/review-list">成绩审核</el-menu-item>
           <el-menu-item index="/score/query">成绩查询</el-menu-item>
           <el-menu-item index="/score/analysis">成绩分析</el-menu-item>
           <el-menu-item index="/score/score-change">成绩变更</el-menu-item>
         </el-sub-menu>
 
-        <el-menu-item index="/stat">
-          <el-icon><DataAnalysis /></el-icon>
-          <template #title>统计分析</template>
+        <!-- student: score query only -->
+        <el-menu-item v-if="!isAdmin && !isTeacher" index="/score/query">
+          <el-icon><Document /></el-icon>
+          <template #title>成绩查询</template>
         </el-menu-item>
+
+        <el-sub-menu index="stat">
+          <template #title>
+            <el-icon><DataAnalysis /></el-icon>
+            <span>统计分析</span>
+          </template>
+          <el-menu-item v-if="isAdmin || isTeacher" index="/stat">统计概览</el-menu-item>
+          <el-menu-item v-if="isAdmin || isTeacher" index="/stat/exam-overview">考试成绩总览</el-menu-item>
+          <el-menu-item v-if="isAdmin || isTeacher" index="/stat/class-analysis">班级成绩分析</el-menu-item>
+          <el-menu-item index="/stat/student-trend">学生成绩趋势</el-menu-item>
+          <el-menu-item v-if="isAdmin || isTeacher" index="/stat/subject-compare">科目成绩对比</el-menu-item>
+        </el-sub-menu>
 
         <el-sub-menu index="message">
           <template #title>
@@ -52,15 +70,17 @@
             <span>消息中心</span>
           </template>
           <el-menu-item index="/notification">通知管理</el-menu-item>
-          <el-menu-item index="/warning">成绩预警</el-menu-item>
+          <el-menu-item v-if="isAdmin || isTeacher" index="/warning">成绩预警</el-menu-item>
         </el-sub-menu>
 
-        <el-sub-menu index="system">
+        <el-sub-menu v-if="isAdmin" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系统管理</span>
           </template>
-          <el-menu-item index="/system">系统管理</el-menu-item>
+          <el-menu-item index="/system">系统总览</el-menu-item>
+          <el-menu-item index="/system/user">用户管理</el-menu-item>
+          <el-menu-item index="/system/dict">数据字典</el-menu-item>
           <el-menu-item index="/system/config">系统配置</el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -78,7 +98,7 @@
         </div>
 
         <div class="header-right">
-          <el-badge :value="unreadCount" class="notification-badge">
+          <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge" @click="goNotification">
             <el-icon :size="20"><Bell /></el-icon>
           </el-badge>
 
@@ -110,11 +130,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ChatPanel from '@/components/ChatPanel.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { getUnreadCount } from '@/api/notification'
 import {
   HomeFilled,
   School,
@@ -135,6 +156,29 @@ const isCollapse = ref(false)
 const unreadCount = ref(0)
 
 const activeMenu = computed(() => route.path)
+
+// userType: 1 超管 2 校管 3 教师 4 学生 5 家长
+const userType = computed(() => userStore.userInfo?.userType ?? 0)
+const isAdmin = computed(() => userType.value === 1 || userType.value === 2)
+const isTeacher = computed(() => userType.value === 3)
+// student: only dashboard, score/query, stat/student-trend, notification — controlled via v-if above
+
+// ponytail: 铃铛角标以前从未赋值恒为 0；进入布局时拉一次未读数，点击跳通知页
+const loadUnreadCount = async () => {
+  try {
+    unreadCount.value = (await getUnreadCount()) ?? 0
+  } catch {
+    unreadCount.value = 0
+  }
+}
+
+const goNotification = () => {
+  router.push('/notification')
+}
+
+onMounted(() => {
+  loadUnreadCount()
+})
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value

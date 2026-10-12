@@ -2,11 +2,30 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.school.module.student.mapper.ClassStudentMapper">
 
-    <!-- 查询学生所在的所有班级ID -->
+    <!-- 查询学生所在的所有班级ID（只取未删除的班级） -->
+    <!-- ponytail: G-4 — class 是逻辑删，不过滤 c.deleted 的话被删班级的残留关联会让分班守卫误判「已在其他班」 -->
     <select id="selectClassIdsByStudentId" resultType="java.lang.Long">
-        SELECT class_id
-        FROM class_student
-        WHERE student_id = #{studentId}
+        SELECT cs.class_id
+        FROM class_student cs
+        JOIN class c ON c.id = cs.class_id AND c.deleted = 0
+        WHERE cs.student_id = #{studentId}
+    </select>
+
+    <!-- 批量查询学生的班级信息（含班级名/年级名），一次查完避免 N+1 -->
+    <select id="selectClassRowsByStudentIds" resultType="com.school.module.student.dto.StudentClassRow">
+        SELECT
+            cs.student_id,
+            cs.class_id,
+            c.class_name,
+            g.grade_name
+        FROM class_student cs
+        JOIN class c ON c.id = cs.class_id AND c.deleted = 0
+        LEFT JOIN grade g ON g.id = c.grade_id AND g.deleted = 0
+        WHERE cs.student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY cs.student_id, cs.class_id
     </select>
 
     <!-- 查询班级下的所有学生ID -->
@@ -20,6 +39,12 @@
     <delete id="deleteByStudentId">
         DELETE FROM class_student
         WHERE student_id = #{studentId}
+    </delete>
+
+    <!-- 删除班级的所有学生关联（班级删除时清理） -->
+    <delete id="deleteByClassId">
+        DELETE FROM class_student
+        WHERE class_id = #{classId}
     </delete>
 
     <!-- 删除学生在某个班级的关联 -->

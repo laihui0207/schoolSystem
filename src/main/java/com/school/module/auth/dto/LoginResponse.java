@@ -33,6 +33,7 @@ public class LoginResponse implements Serializable {
     /**
      * 令牌类型
      */
+    @Builder.Default
     private String tokenType = "Bearer";
 
     /**
@@ -79,6 +80,26 @@ public class LoginResponse implements Serializable {
          * 学校ID
          */
         private Long schoolId;
+
+        /**
+         * 关联学生ID（student.id），非学生账号为 null
+         */
+        private Long studentId;
+
+        /**
+         * 关联教师ID（teacher.id），非教师账号为 null
+         */
+        private Long teacherId;
+
+        /**
+         * 是否班主任
+         */
+        private boolean headTeacher;
+
+        /**
+         * 角色编码：super_admin / admin / teacher / student / parent
+         */
+        private String role;
     }
 
 }

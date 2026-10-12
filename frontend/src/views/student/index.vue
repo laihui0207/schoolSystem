@@ -3,31 +3,21 @@
     <el-card>
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
-        <el-form-item label="学号">
-          <el-input
-            v-model="searchForm.studentNo"
-            placeholder="请输入学号"
-            clearable
-            @keyup.enter="handleSearch"
-          />
-        </el-form-item>
-        <el-form-item label="姓名">
-          <el-input
-            v-model="searchForm.name"
-            placeholder="请输入姓名"
-            clearable
-            @keyup.enter="handleSearch"
-          />
+        <el-form-item label="学校">
+          <el-select v-model="searchForm.schoolId" placeholder="请选择学校" clearable style="width:160px" @change="onSchoolChange">
+            <el-option v-for="s in schoolList" :key="s.id" :label="s.schoolName" :value="s.id!" />
+          </el-select>
         </el-form-item>
         <el-form-item label="班级">
-          <el-select v-model="searchForm.classId" placeholder="请选择班级" clearable>
-            <el-option
-              v-for="item in classList"
-              :key="item.id"
-              :label="item.className"
-              :value="item.id"
-            />
+          <el-select v-model="searchForm.classId" placeholder="请选择班级" clearable :disabled="!searchForm.schoolId">
+            <el-option v-for="item in classList" :key="item.id" :label="item.className" :value="item.id!" />
           </el-select>
+        </el-form-item>
+        <el-form-item label="学号">
+          <el-input v-model="searchForm.studentNo" placeholder="请输入学号" clearable @keyup.enter="handleSearch" />
+        </el-form-item>
+        <el-form-item label="姓名">
+          <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
@@ -73,13 +63,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Edit" @click="handleEdit(row as Student)">
               编辑
             </el-button>
             <el-button link type="warning" :icon="Promotion" @click="handleAssignClass(row as Student)">
               分班
+            </el-button>
+            <el-button link type="info" :icon="Switch" @click="handleTransferClass(row as Student)">
+              转班
             </el-button>
             <el-button link type="danger" :icon="Delete" @click="handleDelete(row as Student)">
               删除
@@ -96,7 +89,7 @@
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="handleSearch"
-        @current-change="handleSearch"
+        @current-change="loadData"
         style="margin-top: 20px"
       />
     </el-card>
@@ -191,7 +184,7 @@
               v-for="item in classList"
               :key="item.id"
               :label="item.className"
-              :value="item.id"
+              :value="item.id!"
             />
           </el-select>
         </el-form-item>
@@ -201,13 +194,59 @@
         <el-button type="primary" @click="handleAssignClassSubmit">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- 转班对话框 -->
+    <el-dialog
+      v-model="transferDialogVisible"
+      title="学生转班"
+      width="400px"
+    >
+      <el-form label-width="80px">
+        <el-form-item label="学生">
+          <el-input :value="currentStudent?.name" disabled />
+        </el-form-item>
+        <el-form-item label="当前班级">
+          <el-input :value="currentStudent?.classes?.[0]?.className || '未分班'" disabled />
+        </el-form-item>
+        <!-- ponytail: F-06 — 未分班学生没有 fromClassId，后端 transferClass 必填会 400；提示改用「分班」 -->
+        <el-alert
+          v-if="!transferFromClassId"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="该学生尚未分班，请使用「分班」功能"
+          style="margin-bottom: 16px"
+        />
+        <el-form-item label="目标班级">
+          <!-- ponytail: F-06 — 目标班级按该学生 schoolId 独立加载，不复用搜索栏可能属于别校的 classList -->
+          <el-select
+            v-model="transferToClassId"
+            placeholder="请选择目标班级"
+            style="width: 100%"
+            :loading="transferClassLoading"
+            :disabled="!transferFromClassId"
+          >
+            <el-option
+              v-for="item in transferClassList"
+              :key="item.id"
+              :label="item.className"
+              :value="item.id!"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="transferDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!transferFromClassId" @click="handleTransferClassSubmit">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, Edit, Delete, Promotion } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, Edit, Delete, Promotion, Switch } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getStudentList,
@@ -215,6 +254,7 @@ import {
   updateStudent,
   deleteStudent,
   assignClass,
+  transferClass,
   type Student
 } from '@/api/student'
 import { getSchoolList, type School } from '@/api/school'
@@ -226,8 +266,8 @@ const STATUS_LABEL: Record<number, string> = { 0: '离校', 1: '在读', 2: '休
 const STATUS_TYPE: Record<number, string> = { 0: 'info', 1: 'success', 2: 'warning' }
 
 const statusLabel = (s?: number) => s !== undefined ? (STATUS_LABEL[s] ?? '-') : '-'
-const statusType = (s?: number): '' | 'success' | 'warning' | 'info' | 'danger' =>
-  (s !== undefined ? STATUS_TYPE[s] : 'info') as '' | 'success' | 'warning' | 'info' | 'danger'
+const statusType = (s?: number): 'success' | 'warning' | 'info' | 'danger' =>
+  (s !== undefined ? STATUS_TYPE[s] : 'info') as 'success' | 'warning' | 'info' | 'danger'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -235,6 +275,7 @@ const submitLoading = ref(false)
 const searchForm = reactive({
   studentNo: '',
   name: '',
+  schoolId: undefined as number | undefined,
   classId: undefined as number | undefined,
   status: undefined as number | undefined
 })
@@ -250,10 +291,15 @@ const schoolList = ref<School[]>([])
 const classList = ref<Class[]>([])
 const dialogVisible = ref(false)
 const assignDialogVisible = ref(false)
+const transferDialogVisible = ref(false)
 const dialogTitle = ref('')
 const formRef = ref<FormInstance>()
 const currentStudent = ref<Student | null>(null)
 const assignClassId = ref<number>()
+const transferToClassId = ref<number>()
+const transferClassList = ref<Class[]>([])
+const transferClassLoading = ref(false)
+const transferFromClassId = computed(() => currentStudent.value?.classes?.[0]?.classId)
 
 const defaultForm = (): Student => ({
   id: undefined,
@@ -302,13 +348,19 @@ const loadSchoolList = async () => {
   }
 }
 
-const loadClassList = async () => {
+const loadClassList = async (schoolId: number) => {
   try {
-    const res = await getClassList({ pageNum: 1, pageSize: 1000 }) as { records: Class[] }
+    const res = await getClassList({ schoolId, pageNum: 1, pageSize: 1000 }) as { records: Class[] }
     classList.value = res.records || []
   } catch {
     ElMessage.error('加载班级列表失败')
   }
+}
+
+const onSchoolChange = async (schoolId: number) => {
+  searchForm.classId = undefined
+  classList.value = []
+  if (schoolId) await loadClassList(schoolId)
 }
 
 const handleSearch = () => {
@@ -317,7 +369,8 @@ const handleSearch = () => {
 }
 
 const handleReset = () => {
-  Object.assign(searchForm, { studentNo: '', name: '', classId: undefined, status: undefined })
+  Object.assign(searchForm, { studentNo: '', name: '', schoolId: undefined, classId: undefined, status: undefined })
+  classList.value = []
   handleSearch()
 }
 
@@ -366,6 +419,54 @@ const handleAssignClassSubmit = async () => {
   }
 }
 
+const loadTransferClassList = async (schoolId: number) => {
+  transferClassLoading.value = true
+  try {
+    const res = await getClassList({ schoolId, pageNum: 1, pageSize: 1000 }) as { records: Class[] }
+    transferClassList.value = res.records || []
+  } catch {
+    ElMessage.error('加载班级列表失败')
+  } finally {
+    transferClassLoading.value = false
+  }
+}
+
+const handleTransferClass = (row: Student) => {
+  currentStudent.value = row
+  transferToClassId.value = undefined
+  transferClassList.value = []
+  // ponytail: F-06 — 始终按该学生的 schoolId 重新加载，搜索栏的 classList 可能是另一所学校的
+  if (row.schoolId) {
+    loadTransferClassList(row.schoolId)
+  }
+  transferDialogVisible.value = true
+}
+
+const handleTransferClassSubmit = async () => {
+  const fromClassId = transferFromClassId.value
+  // ponytail: F-06 — fromClassId 为空时后端 @RequestParam 必填会 400，这里前置拦截
+  if (!fromClassId) {
+    ElMessage.warning('该学生尚未分班，请使用「分班」功能')
+    return
+  }
+  if (!transferToClassId.value) {
+    ElMessage.warning('请选择目标班级')
+    return
+  }
+  if (fromClassId === transferToClassId.value) {
+    ElMessage.warning('目标班级与当前班级相同')
+    return
+  }
+  try {
+    await transferClass(currentStudent.value!.id!, fromClassId, transferToClassId.value)
+    ElMessage.success('转班成功')
+    transferDialogVisible.value = false
+    loadData()
+  } catch {
+    ElMessage.error('转班失败')
+  }
+}
+
 const handleSubmit = async () => {
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
@@ -402,7 +503,6 @@ const resetForm = () => {
 onMounted(() => {
   loadData()
   loadSchoolList()
-  loadClassList()
 })
 </script>
 
@@ -413,3 +513,4 @@ onMounted(() => {
   }
 }
 </style>
+

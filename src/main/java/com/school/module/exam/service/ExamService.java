@@ -83,6 +83,12 @@ public interface ExamService {
      */
     void publishExam(Long id);
 
-    ExamProgressResponse getExamProgress(Long examId);
+    /**
+     * 获取考试录入进度
+     *
+     * @param id 考试ID
+     * @return 各班级各科目录入进度
+     */
+    ExamProgressResponse getExamProgress(Long id);
 
 }

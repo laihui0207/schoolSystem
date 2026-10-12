@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 班级成绩统计响应
@@ -101,6 +102,26 @@ public class ClassStatResponse {
     private List<ScoreRange> scoreRanges;
 
     /**
+     * 总分排名前列的学生
+     */
+    private List<TopStudent> topStudents;
+
+    /**
+     * 学生排名
+     */
+    @Data
+    @Builder
+    public static class TopStudent {
+        private Integer rank;
+        private Long studentId;
+        private String studentNo;
+        private String studentName;
+        private BigDecimal totalScore;
+        /** 科目名称 -> 得分 */
+        private Map<String, BigDecimal> subjectScores;
+    }
+
+    /**
      * 科目统计
      */
     @Data
@@ -127,3 +148,4 @@ public class ClassStatResponse {
     }
 
 }
+

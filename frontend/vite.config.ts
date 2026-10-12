@@ -14,7 +14,7 @@ export default defineConfig({
       dts: 'src/auto-imports.d.ts',
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
       dts: 'src/components.d.ts',
     }),
   ],
@@ -26,9 +26,9 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
+      '/api/v1': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
+        changeOrigin: true
       }
     }
   }

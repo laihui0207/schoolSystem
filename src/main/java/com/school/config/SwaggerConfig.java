@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  *
  * @author School System
  */
-@Configuration
+// @Configuration // 暂时禁用，排查启动问题
 public class SwaggerConfig {
 
     @Bean

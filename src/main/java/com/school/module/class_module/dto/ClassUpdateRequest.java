@@ -22,7 +22,10 @@ public class ClassUpdateRequest {
 
     /**
      * 班主任ID
+     * <p>
+     * PUT 以请求值为准：null（或不传）表示取消班主任。前端编辑弹窗总是携带该字段。
      */
+    // ponytail: G-9 — Jackson 无法区分「未传」与「传 null」，约定 PUT 总是以请求值为准
     private Long headTeacherId;
 
 }

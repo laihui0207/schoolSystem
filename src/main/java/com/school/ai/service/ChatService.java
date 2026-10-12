@@ -103,6 +103,14 @@ public class ChatService {
             default -> "用户";
         };
 
+        // ponytail: 4a executeSql 仅管理员可用（与 SqlQueryTool.assertIsAdmin 一致）；
+        // 按 userType 决定是否下发 SQL 指引与表结构，教师/学生不给 SQL 段落，免得模型反复尝试一个必被拒的工具
+        boolean sqlAllowed = user.isSuperAdmin() || user.isSchoolAdmin();
+        String sqlCapability = sqlAllowed
+                ? "- 当内置工具无法满足需求时，使用 executeSql 工具直接查询数据库"
+                : "- executeSql 工具仅管理员角色可用，当前用户不可调用";
+        String sqlSection = sqlAllowed ? buildSqlSection(user) : buildNoSqlSection();
+
         return String.format("""
                 你是 SchoolSystem 智能助手，专注于学校成绩数据分析与管理。
 
@@ -114,7 +122,7 @@ public class ChatService {
                 - 趋势分析：横向对比（班级间）、纵向对比（多次考试）
                 - 可视化：生成图表配置（ECharts格式）
                 - 报表导出：Excel、PDF
-                - 当内置工具无法满足需求时，使用 executeSql 工具直接查询数据库
+                %s
 
                 ## 权限规则
                 - 超级管理员/学校管理员：可查看全部数据
@@ -122,16 +130,11 @@ public class ChatService {
                 - 任课老师：只能查看所授课班级+科目数据，不能审核成绩
                 - 学生：只能查看自己的成绩
 
-                ## executeSql 使用规则
-                - 仅在其他工具无法满足时使用
-                - 非超管必须在 WHERE 中加 school_id = %s
-                - 所有表查询必须加 deleted = 0
-                - 结果超过 200 行会被截断
-
-                ## 数据库表结构
                 %s
 
-                ## 回答风格
+                ## 图表输出规则
+                - 生成图表时，工具返回的 JSON 必须直接输出，禁止用 ```json ``` 代码块包裹
+                - 图表 JSON 前后可以加说明文字，但 JSON 本身必须是裸文本
                 - 简洁专业，数据驱动
                 - 发现问题时主动提出建议
                 - 不确定时说明，不编造数据
@@ -142,9 +145,45 @@ public class ChatService {
                 user.getUserId(),
                 roleName,
                 user.getSchoolId() != null ? user.getSchoolId().toString() : "全平台",
-                user.getSchoolId() != null ? user.getSchoolId().toString() : "<指定schoolId>",
+                sqlCapability,
+                sqlSection
+        );
+    }
+
+    /**
+     * 管理员：executeSql 使用规则 + 数据库表结构
+     */
+    private String buildSqlSection(LoginUser user) {
+        String schoolIdHint = user.getSchoolId() != null ? user.getSchoolId().toString() : "<指定schoolId>";
+        // ponytail: D-ai-1/2 提示词与 SqlQueryTool 的新规则对齐——school_id 由系统注入、非超管表白名单、sys_user 必须 JOIN 且禁止整行投影
+        return String.format("""
+                ## executeSql 使用规则（重要）
+                - 内置工具返回字段不足、或明确查不到时，**必须立即调用 executeSql**，不允许直接回复"查不到"
+                - 教师电话：teacher 表无 phone，需 JOIN sys_user ON sys_user.id = teacher.user_id
+                - 学生家长电话：parent_student JOIN sys_user ON sys_user.id = parent_student.parent_user_id JOIN student ON student.id = parent_student.student_id
+                - 租户隔离由系统自动完成：非超管的 SQL 会被自动为 teacher/student/class/grade/subject/exam/score/academic_term 的每个引用追加 school_id = %s，无需手写
+                - 非超管只能查询：academic_term, grade, class, student, teacher, subject, exam, score, teacher_class, class_student, exam_subject, parent_student, sys_user
+                - sys_user 必须与上述业务表 JOIN 使用，并明确列出字段：禁止 SELECT * / u.* / to_json(u) 等整行投影
+                - 只写一条 SELECT：不要加注释、不要以分号结尾
+                - 所有表查询必须加 deleted = 0（sys_user 除外）
+                - 禁止查询 sys_user.password，禁止访问 pg_catalog / information_schema 等系统目录
+                - 结果超过 200 行会被截断
+
+                ## 数据库表结构
+                %s""",
+                schoolIdHint,
                 dbSchema
         );
+    }
+
+    /**
+     * 教师/学生/家长：明确告知 executeSql 不可用，查不到就如实说明
+     */
+    private String buildNoSqlSection() {
+        return """
+                ## executeSql 使用限制（重要）
+                - executeSql 仅管理员角色可用，当前用户是教师/学生，**不要调用 executeSql**
+                - 教师/学生的问题一律使用内置工具回答；内置工具查不到时如实说明"当前权限下无法查询"，不要编造数据，也不要尝试改写成 SQL""";
     }
 
     private String loadDbSchema() {

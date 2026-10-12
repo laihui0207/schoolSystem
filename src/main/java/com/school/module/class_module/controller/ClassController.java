@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/classes")
+@RequestMapping("/classes")
 @RequiredArgsConstructor
 public class ClassController {
 
@@ -53,12 +53,13 @@ public class ClassController {
     }
 
     /**
-     * 设置班主任
+     * 设置班主任（headTeacherId 省略表示取消班主任）
      */
+    // ponytail: required=false 让前端能不传参来撤掉班主任，否则这个接口只能换人不能取消
     @PatchMapping("/{id}/head-teacher")
     public Result<Void> setHeadTeacher(
             @PathVariable Long id,
-            @RequestParam Long headTeacherId) {
+            @RequestParam(required = false) Long headTeacherId) {
         classService.setHeadTeacher(id, headTeacherId);
         return Result.success();
     }

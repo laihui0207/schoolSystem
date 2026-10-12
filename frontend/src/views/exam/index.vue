@@ -3,24 +3,52 @@
     <el-card>
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
+        <el-form-item label="考试名称">
+          <el-input
+            v-model="searchForm.examName"
+            placeholder="请输入考试名称"
+            clearable
+            @keyup.enter="handleSearch"
+          />
+        </el-form-item>
         <el-form-item label="学期">
-          <el-select v-model="searchForm.termId" placeholder="请选择学期" clearable style="width: 200px">
+          <el-select v-model="searchForm.termId" placeholder="全部" clearable style="width: 160px">
             <el-option
-              v-for="t in termList"
-              :key="t.id"
-              :label="termLabel(t)"
-              :value="t.id"
+              v-for="item in termList"
+              :key="item.id"
+              :label="termLabel(item)"
+              :value="item.id!"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="学校">
+          <el-select v-model="searchForm.schoolId" placeholder="全部" clearable style="width: 160px">
+            <el-option
+              v-for="item in schoolList"
+              :key="item.id"
+              :label="item.schoolName"
+              :value="item.id!"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="考试状态">
+          <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 130px">
+            <el-option
+              v-for="item in statusOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
             />
           </el-select>
         </el-form-item>
         <el-form-item label="考试类型">
-          <el-select v-model="searchForm.examType" placeholder="请选择类型" clearable>
-            <el-option v-for="o in examTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-            <el-option v-for="o in statusOptions" :key="o.value" :label="o.label" :value="o.value" />
+          <el-select v-model="searchForm.examType" placeholder="全部" clearable style="width: 130px">
+            <el-option
+              v-for="item in typeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -32,25 +60,34 @@
 
       <!-- 表格 -->
       <el-table v-loading="loading" :data="tableData" stripe border style="width: 100%">
-        <el-table-column prop="examName" label="考试名称" min-width="150" />
-        <el-table-column prop="termName" label="学期" width="160" />
-        <el-table-column prop="examType" label="考试类型" width="100">
-          <template #default="{ row }">
-            {{ examTypeLabel(row.examType) }}
-          </template>
+        <el-table-column prop="examName" label="考试名称" min-width="160" show-overflow-tooltip />
+        <el-table-column label="考试类型" width="110">
+          <template #default="{ row }">{{ getTypeText(row.examType) }}</template>
+        </el-table-column>
+        <el-table-column prop="termName" label="学期" width="140" show-overflow-tooltip />
+        <el-table-column prop="schoolName" label="学校" min-width="140" show-overflow-tooltip />
+        <el-table-column label="年级" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">{{ (row.gradeNames || []).join('、') || '-' }}</template>
         </el-table-column>
         <el-table-column prop="examDate" label="考试日期" width="120" />
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 0" link type="primary" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
-            <el-button v-if="row.status === 0" link type="success" @click="handleStartInput(row)">开始录入</el-button>
-            <el-button v-if="row.status === 2" link type="warning" @click="handlePublish(row)">发布</el-button>
-            <el-button v-if="row.status === 0" link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="info" @click="handleDetail(row)">详情</el-button>
+            <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button
+              v-if="getStatusAction(row.status)"
+              link
+              :type="getStatusAction(row.status)!.buttonType"
+              @click="handleStatusAction(row)"
+            >
+              {{ getStatusAction(row.status)!.label }}
+            </el-button>
+            <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -68,120 +105,93 @@
       />
     </el-card>
 
-    <!-- 新增/编辑对话框 -->
-    <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px" @close="handleDialogClose">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="考试名称" prop="examName">
-          <el-input v-model="form.examName" placeholder="请输入考试名称" />
-        </el-form-item>
-        <el-form-item label="学期" prop="termId">
-          <el-select v-model="form.termId" placeholder="请选择学期" style="width: 100%">
-            <el-option
-              v-for="t in termList"
-              :key="t.id"
-              :label="termLabel(t)"
-              :value="t.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="考试类型" prop="examType">
-          <el-select v-model="form.examType" placeholder="请选择类型" style="width: 100%">
-            <el-option v-for="o in examTypeOptions" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="考试日期" prop="examDate">
-          <el-date-picker
-            v-model="form.examDate"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="请选择日期"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
+    <ExamFormDialog v-model:visible="dialogVisible" :edit-data="editData" @saved="loadData" />
   </div>
 </template>
-
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { getExamList, createExam, updateExam, deleteExam, startInput, publishExam } from '@/api/exam'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
+import {
+  getExamList,
+  deleteExam,
+  startExamInput,
+  submitExamReview,
+  publishExam,
+  type Exam,
+  type ExamQuery
+} from '@/api/exam'
+import { getSchoolList, type School } from '@/api/school'
 import { getAllTerms, termLabel, type Term } from '@/api/term'
+import {
+  statusOptions,
+  typeOptions,
+  getStatusType,
+  getStatusText,
+  getTypeText,
+  getStatusAction
+} from './examOptions'
+import ExamFormDialog from './ExamFormDialog.vue'
+import { handleError } from '@/utils/errorHandler'
+import type { PageResponse } from '@/types/common'
 
-const examTypeOptions = [
-  { label: '月考', value: 1 },
-  { label: '期中', value: 2 },
-  { label: '期末', value: 3 },
-  { label: '模拟', value: 4 },
-  { label: '其他', value: 5 }
-]
-
-const statusOptions = [
-  { label: '未开始', value: 0 },
-  { label: '录入中', value: 1 },
-  { label: '审核中', value: 2 },
-  { label: '已发布', value: 3 }
-]
-
-const examTypeMap: Record<number, string> = { 1: '月考', 2: '期中', 3: '期末', 4: '模拟', 5: '其他' }
-const statusTagMap: Record<number, string> = { 0: 'info', 1: 'warning', 2: '', 3: 'success' }
-const statusLabelMap: Record<number, string> = { 0: '未开始', 1: '录入中', 2: '审核中', 3: '已发布' }
-
-const examTypeLabel = (v: number) => examTypeMap[v] ?? '-'
-const statusTagType = (v: number) => statusTagMap[v] ?? 'info'
-const statusLabel = (v: number) => statusLabelMap[v] ?? '未知'
+const router = useRouter()
 
 const loading = ref(false)
-const submitLoading = ref(false)
+const tableData = ref<Exam[]>([])
+const schoolList = ref<School[]>([])
 const termList = ref<Term[]>([])
-const tableData = ref<any[]>([])
+
 const dialogVisible = ref(false)
-const dialogTitle = ref('')
-const formRef = ref<FormInstance>()
+const editData = ref<Exam | null>(null)
 
 const searchForm = reactive({
-  termId: undefined as number | undefined,
-  examType: undefined as number | undefined,
-  status: undefined as number | undefined
-})
-
-const pagination = reactive({ pageNum: 1, pageSize: 10, total: 0 })
-
-const form = reactive({
-  id: undefined as number | undefined,
   examName: '',
   termId: undefined as number | undefined,
-  examType: undefined as number | undefined,
-  examDate: ''
+  schoolId: undefined as number | undefined,
+  status: undefined as number | undefined,
+  examType: undefined as number | undefined
 })
 
-const rules: FormRules = {
-  examName: [{ required: true, message: '请输入考试名称', trigger: 'blur' }],
-  termId: [{ required: true, message: '请选择学期', trigger: 'change' }],
-  examType: [{ required: true, message: '请选择考试类型', trigger: 'change' }]
-}
+const pagination = reactive({
+  pageNum: 1,
+  pageSize: 10,
+  total: 0
+})
 
 const loadData = async () => {
   loading.value = true
   try {
-    const res: any = await getExamList({
+    const params: ExamQuery = {
       ...searchForm,
       pageNum: pagination.pageNum,
       pageSize: pagination.pageSize
-    })
-    tableData.value = res.records ?? []
-    pagination.total = res.total ?? 0
-  } catch {
-    // request interceptor handles error messages
+    }
+    const res = (await getExamList(params)) as PageResponse<Exam>
+    tableData.value = res.records || []
+    pagination.total = res.total || 0
+  } catch (error) {
+    handleError(error, '加载数据失败')
   } finally {
     loading.value = false
+  }
+}
+
+const loadSchoolList = async () => {
+  try {
+    const res = (await getSchoolList({ pageNum: 1, pageSize: 1000 })) as { records: School[] }
+    schoolList.value = res.records || []
+  } catch (error) {
+    handleError(error, '加载学校列表失败')
+  }
+}
+
+const loadTermList = async () => {
+  try {
+    termList.value = ((await getAllTerms()) as Term[]) || []
+  } catch (error) {
+    handleError(error, '加载学期列表失败')
   }
 }
 
@@ -191,105 +201,77 @@ const handleSearch = () => {
 }
 
 const handleReset = () => {
+  searchForm.examName = ''
   searchForm.termId = undefined
-  searchForm.examType = undefined
+  searchForm.schoolId = undefined
   searchForm.status = undefined
+  searchForm.examType = undefined
   handleSearch()
 }
 
-const resetForm = () => {
-  form.id = undefined
-  form.examName = ''
-  form.termId = undefined
-  form.examType = undefined
-  form.examDate = ''
-}
-
 const handleAdd = () => {
-  dialogTitle.value = '新增考试'
-  resetForm()
+  editData.value = null
   dialogVisible.value = true
 }
 
-const handleEdit = (row: any) => {
-  dialogTitle.value = '编辑考试'
-  Object.assign(form, {
-    id: row.id,
-    examName: row.examName,
-    termId: row.termId,
-    examType: row.examType,
-    examDate: row.examDate
-  })
+const handleEdit = (row: Exam) => {
+  // 深拷贝，避免直接修改表格数据
+  editData.value = JSON.parse(JSON.stringify(row)) as Exam
   dialogVisible.value = true
 }
 
-const handleSubmit = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    submitLoading.value = true
-    try {
-      if (form.id) {
-        await updateExam(form.id, form)
-        ElMessage.success('更新成功')
-      } else {
-        await createExam(form)
-        ElMessage.success('创建成功')
-      }
-      dialogVisible.value = false
-      loadData()
-    } catch {
-      // handled by interceptor
-    } finally {
-      submitLoading.value = false
-    }
-  })
+const handleDetail = (row: Exam) => {
+  router.push(`/exam/detail/${row.id}`)
 }
 
-const handleDialogClose = () => {
-  formRef.value?.resetFields()
-  resetForm()
-}
-
-const handleStartInput = async (row: any) => {
-  try {
-    await startInput(row.id)
-    ElMessage.success('已开始录入')
-    loadData()
-  } catch {
-    // handled by interceptor
-  }
-}
-
-const handlePublish = async (row: any) => {
-  try {
-    await publishExam(row.id)
-    ElMessage.success('发布成功')
-    loadData()
-  } catch {
-    // handled by interceptor
-  }
-}
-
-const handleDelete = (row: any) => {
-  ElMessageBox.confirm('确定要删除该考试吗？', '提示', {
+const handleDelete = (row: Exam) => {
+  ElMessageBox.confirm(`确定要删除考试「${row.examName}」吗？`, '提示', {
     type: 'warning',
     confirmButtonText: '确定',
     cancelButtonText: '取消'
-  }).then(async () => {
-    try {
-      await deleteExam(row.id)
-      ElMessage.success('删除成功')
-      loadData()
-    } catch {
-      // handled by interceptor
-    }
   })
+    .then(async () => {
+      try {
+        await deleteExam(row.id!)
+        ElMessage.success('删除成功')
+        loadData()
+      } catch (error) {
+        handleError(error, '删除失败')
+      }
+    })
+    .catch(() => undefined)
 }
 
-onMounted(async () => {
-  termList.value = await getAllTerms()
+const handleStatusAction = (row: Exam) => {
+  const action = getStatusAction(row.status)
+  if (!action) return
+  ElMessageBox.confirm(`确定要「${action.label}」吗？`, '提示', {
+    type: 'warning',
+    confirmButtonText: '确定',
+    cancelButtonText: '取消'
+  })
+    .then(async () => {
+      try {
+        if (action.action === 'start-input') {
+          await startExamInput(row.id!)
+        } else if (action.action === 'submit-review') {
+          await submitExamReview(row.id!)
+        } else {
+          await publishExam(row.id!)
+        }
+        ElMessage.success(`${action.label}成功`)
+        loadData()
+      } catch (error) {
+        handleError(error, `${action.label}失败`)
+      }
+    })
+    .catch(() => undefined)
+}
+
+onMounted(() => {
   loadData()
+  loadSchoolList()
+  loadTermList()
 })
 </script>
 

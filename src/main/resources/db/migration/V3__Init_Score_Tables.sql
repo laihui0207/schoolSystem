@@ -105,12 +105,14 @@ COMMENT ON COLUMN score.updated_at IS '更新时间';
 COMMENT ON COLUMN score.deleted IS '删除标记';
 
 -- 创建唯一索引和普通索引
-CREATE UNIQUE INDEX uk_exam_student_subject ON score(exam_id, student_id, subject_id) WHERE deleted = 0;
+-- 注意: PostgreSQL部分索引在Druid中可能触发SQL注入检查，使用普通唯一索引
+CREATE UNIQUE INDEX uk_exam_student_subject ON score(exam_id, student_id, subject_id, deleted);
 CREATE INDEX idx_score_school_exam ON score(school_id, exam_id);
 CREATE INDEX idx_score_class_exam ON score(class_id, exam_id);
 CREATE INDEX idx_score_student ON score(student_id);
 CREATE INDEX idx_score_exam ON score(exam_id);
 CREATE INDEX idx_score_status ON score(status);
+CREATE INDEX idx_score_deleted ON score(deleted);
 
 -- 成绩变更日志表
 CREATE TABLE IF NOT EXISTS score_change_log (

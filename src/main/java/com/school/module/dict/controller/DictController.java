@@ -15,17 +15,19 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/dict")
+@RequestMapping("/dict")
 @RequiredArgsConstructor
 public class DictController {
 
     private final DictService dictService;
 
     /**
-     * 查询所有字典类型
+     * 查询字典类型列表
+     *
+     * ponytail: 字典类型是低基数配置数据，直接全量返回；量级失控再加分页
      */
-    @GetMapping("/type")
-    public Result<List<DictType>> getDictTypeList() {
+    @GetMapping("/types")
+    public Result<List<DictType>> listDictTypes() {
         return Result.success(dictService.list());
     }
 
@@ -41,7 +43,7 @@ public class DictController {
     /**
      * 创建字典类型
      */
-    @PostMapping("/type")
+    @PostMapping("/types")
     public Result<Void> createDictType(@RequestBody DictType dictType) {
         dictService.createDictType(dictType);
         return Result.success();
@@ -59,7 +61,7 @@ public class DictController {
     /**
      * 更新字典类型
      */
-    @PutMapping("/type/{id}")
+    @PutMapping("/types/{id}")
     public Result<Void> updateDictType(@PathVariable Long id, @RequestBody DictType dictType) {
         dictType.setId(id);
         dictService.updateDictType(dictType);
@@ -79,7 +81,7 @@ public class DictController {
     /**
      * 删除字典类型
      */
-    @DeleteMapping("/type/{id}")
+    @DeleteMapping("/types/{id}")
     public Result<Void> deleteDictType(@PathVariable Long id) {
         dictService.deleteDictType(id);
         return Result.success();

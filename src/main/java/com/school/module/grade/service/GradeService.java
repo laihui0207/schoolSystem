@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.module.grade.dto.GradeCreateRequest;
 import com.school.module.grade.dto.GradeQueryRequest;
 import com.school.module.grade.dto.GradeResponse;
+import com.school.module.grade.dto.GradeUpdateRequest;
 
 import java.util.List;
 
@@ -22,7 +23,7 @@ public interface GradeService {
 
     GradeResponse create(GradeCreateRequest req);
 
-    GradeResponse update(Long id, GradeCreateRequest req);
+    GradeResponse update(Long id, GradeUpdateRequest req);
 
     void delete(Long id);
 

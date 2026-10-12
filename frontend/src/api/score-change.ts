@@ -7,9 +7,14 @@ export interface ScoreChangeApplyRequest {
   changeReason: string
 }
 
+/**
+ * 审批请求（契约 P：与后端 ScoreChangeApproveRequest 一致）
+ * ponytail: 后端按 changeLogIds 列表 + result 1/2 接收，审批人取 SecurityContext，不再从 query 传 approverId
+ */
 export interface ScoreChangeApproveRequest {
-  id: number
-  approved: boolean
+  changeLogIds: number[]
+  /** 1-通过 2-驳回 */
+  result: 1 | 2
   rejectReason?: string
 }
 
@@ -53,11 +58,10 @@ export const applyScoreChange = (data: ScoreChangeApplyRequest, applicantId: num
   })
 }
 
-export const approveScoreChange = (data: ScoreChangeApproveRequest, approverId: number) => {
+export const approveScoreChange = (data: ScoreChangeApproveRequest) => {
   return request<void>({
     url: '/score-changes/approve',
     method: 'post',
-    params: { approverId },
     data
   })
 }

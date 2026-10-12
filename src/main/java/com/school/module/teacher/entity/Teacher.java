@@ -1,6 +1,7 @@
 package com.school.module.teacher.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.school.common.base.BaseEntity;
@@ -60,4 +61,17 @@ public class Teacher extends BaseEntity {
      */
     private Integer status;
 
+    /**
+     * 学校名称（非数据库字段）
+     */
+    @TableField(exist = false)
+    private String schoolName;
+
+    /**
+     * 主教科目名称（非数据库字段）
+     */
+    @TableField(exist = false)
+    private String subjectName;
+
 }
+

@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.school.common.constant.CommonConstants;
 import com.school.common.exception.BusinessException;
 import com.school.common.result.ResultCode;
+import com.school.module.teacher.mapper.TeacherClassMapper;
 import com.school.module.user.entity.SysUser;
+import com.school.module.user.enums.UserRole;
 import com.school.module.user.mapper.SysUserMapper;
 import com.school.security.model.LoginUser;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 public class UserDetailsServiceImpl implements UserDetailsService {
 
     private final SysUserMapper userMapper;
+    private final TeacherClassMapper teacherClassMapper;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -57,14 +60,28 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .map(SimpleGrantedAuthority::new)
                 .forEach(authorities::add);
 
+        // 教师账号额外解析 teacher.id，数据隔离按任教班级收窄时需要
+        boolean isTeacher = UserRole.TEACHER.getUserType().equals(user.getUserType());
+        Long teacherId = isTeacher ? userMapper.selectTeacherIdByUserId(user.getId()) : null;
+
+        // 班主任判断：该教师是否担任任一班级的班主任
+        boolean headTeacher = isTeacher && teacherId != null
+                && !teacherClassMapper.selectHeadClassIdsByTeacherId(teacherId).isEmpty();
+
+        // 学生账号额外解析 student.id，用于校验只能访问自身趋势数据
+        Long studentId = UserRole.STUDENT.getUserType().equals(user.getUserType())
+                ? userMapper.selectStudentIdByUserId(user.getId())
+                : null;
+
         return LoginUser.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
                 .password(user.getPassword())
                 .schoolId(user.getSchoolId())
                 .userType(user.getUserType())
-                .teacherId(null)
-                .studentId(null)
+                .teacherId(teacherId)
+                .studentId(studentId)
+                .headTeacher(headTeacher)
                 .authorities(authorities)
                 .build();
     }

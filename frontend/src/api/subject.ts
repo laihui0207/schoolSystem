@@ -84,11 +84,11 @@ export const deleteSubject = (id: number) => {
 }
 
 /** ponytail: 后端无 /all 端点，借分页取大页 */
-export const getAllSubjects = async (): Promise<Subject[]> => {
+export const getAllSubjects = async (schoolId?: number): Promise<Subject[]> => {
   const page = await request<SubjectPage>({
     url: '/subjects',
     method: 'get',
-    params: { pageNum: 1, pageSize: 1000 }
+    params: { pageNum: 1, pageSize: 1000, ...(schoolId ? { schoolId } : {}) }
   })
   return page?.records ?? []
 }

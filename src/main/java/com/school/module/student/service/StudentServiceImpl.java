@@ -2,20 +2,29 @@ package com.school.module.student.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
+import com.school.module.class_module.entity.SchoolClass;
+import com.school.module.class_module.mapper.ClassMapper;
 import com.school.module.student.dto.StudentCreateRequest;
 import com.school.module.student.dto.StudentQueryRequest;
 import com.school.module.student.dto.StudentResponse;
 import com.school.module.student.dto.StudentUpdateRequest;
+import com.school.module.school.entity.School;
+import com.school.module.school.mapper.SchoolMapper;
+import com.school.module.student.dto.StudentClassRow;
 import com.school.module.student.entity.ClassStudent;
 import com.school.module.student.entity.Student;
 import com.school.module.student.mapper.ClassStudentMapper;
 import com.school.module.student.mapper.StudentMapper;
+import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +38,9 @@ public class StudentServiceImpl implements StudentService {
 
     private final StudentMapper studentMapper;
     private final ClassStudentMapper classStudentMapper;
+    private final SchoolMapper schoolMapper;
+    // ponytail: 只读注入班级 Mapper 做存在性/同校校验，不往 class 模块加方法
+    private final ClassMapper classMapper;
 
     private static final List<Integer> VALID_STATUS = Arrays.asList(0, 1, 2);
     private static final List<Integer> VALID_GENDER = Arrays.asList(1, 2);
@@ -50,7 +62,7 @@ public class StudentServiceImpl implements StudentService {
         // 构建学生实体
         Student student = new Student();
         student.setStudentNo(request.getStudentNo());
-        student.setSchoolId(request.getSchoolId());
+        student.setSchoolId(SecurityUtils.resolveSchoolId(request.getSchoolId()));
         student.setName(request.getName());
         student.setGender(request.getGender());
         student.setBirthDate(request.getBirthDate());
@@ -171,11 +183,7 @@ public class StudentServiceImpl implements StudentService {
                 resultPage.getTotal()
         );
 
-        List<StudentResponse> responses = resultPage.getRecords().stream()
-                .map(this::convertToResponse)
-                .collect(Collectors.toList());
-
-        responsePage.setRecords(responses);
+        responsePage.setRecords(convertToResponses(resultPage.getRecords()));
 
         return responsePage;
     }
@@ -189,10 +197,21 @@ public class StudentServiceImpl implements StudentService {
             throw new BusinessException("学生不存在");
         }
 
+        // ponytail: 没有外键约束，目标班级必须存在且与学生同校，否则会写出跨校/悬空的 class_student 行
+        requireClassInSchool(classId, student.getSchoolId());
+
         // 检查是否已经在该班级
         List<Long> classIds = classStudentMapper.selectClassIdsByStudentId(studentId);
         if (classIds.contains(classId)) {
             throw new BusinessException("学生已在该班级中");
+        }
+
+        // ponytail: 学生同一时间只应在一个班，已分班的必须走转班接口而不是再插一条关联
+        if (!classIds.isEmpty()) {
+            SchoolClass current = classMapper.selectById(classIds.get(0));
+            String currentName = current != null && current.getClassName() != null
+                    ? current.getClassName() : String.valueOf(classIds.get(0));
+            throw new BusinessException("学生已在 " + currentName + "，请使用转班");
         }
 
         // 创建班级学生关联
@@ -211,6 +230,9 @@ public class StudentServiceImpl implements StudentService {
         if (student == null) {
             throw new BusinessException("学生不存在");
         }
+
+        // ponytail: 目标班级必须存在且与学生同校
+        requireClassInSchool(toClassId, student.getSchoolId());
 
         // 检查学生是否在原班级
         List<Long> classIds = classStudentMapper.selectClassIdsByStudentId(studentId);
@@ -264,30 +286,101 @@ public class StudentServiceImpl implements StudentService {
                 .filter(student -> student != null && student.getDeleted() == 0)
                 .collect(Collectors.toList());
 
+        return convertToResponses(students);
+    }
+
+    /**
+     * 校验班级存在且与学生同校
+     */
+    private SchoolClass requireClassInSchool(Long classId, Long studentSchoolId) {
+        SchoolClass schoolClass = classId == null ? null : classMapper.selectById(classId);
+        if (schoolClass == null) {
+            throw new BusinessException("班级不存在");
+        }
+        if (studentSchoolId != null && !studentSchoolId.equals(schoolClass.getSchoolId())) {
+            throw new BusinessException("班级与学生不属于同一学校");
+        }
+        return schoolClass;
+    }
+
+    /**
+     * 转换为响应DTO（单条，自带班级/学校名称回填）
+     */
+    private StudentResponse convertToResponse(Student student) {
+        return convertToResponses(List.of(student)).get(0);
+    }
+
+    /**
+     * 批量转换为响应DTO，班级与学校名称各用一条查询回填，避免 N+1
+     */
+    private List<StudentResponse> convertToResponses(List<Student> students) {
+        if (students.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, List<StudentResponse.ClassInfo>> classesByStudent = loadClasses(students);
+        Map<Long, String> schoolNames = loadSchoolNames(students);
+
         return students.stream()
-                .map(this::convertToResponse)
+                .map(student -> StudentResponse.builder()
+                        .id(student.getId())
+                        .userId(student.getUserId())
+                        .studentNo(student.getStudentNo())
+                        .schoolId(student.getSchoolId())
+                        .schoolName(student.getSchoolId() == null
+                                ? null : schoolNames.get(student.getSchoolId()))
+                        .name(student.getName())
+                        .gender(student.getGender())
+                        .genderName(getGenderName(student.getGender()))
+                        .birthDate(student.getBirthDate())
+                        .enrollmentDate(student.getEnrollmentDate())
+                        .status(student.getStatus())
+                        .statusName(getStatusName(student.getStatus()))
+                        .classes(student.getId() == null
+                                ? List.of() : classesByStudent.getOrDefault(student.getId(), List.of()))
+                        .createdAt(student.getCreatedAt())
+                        .updatedAt(student.getUpdatedAt())
+                        .build())
                 .collect(Collectors.toList());
     }
 
     /**
-     * 转换为响应DTO
+     * 一次查出这批学生的所有班级，按学生ID分组
      */
-    private StudentResponse convertToResponse(Student student) {
-        return StudentResponse.builder()
-                .id(student.getId())
-                .userId(student.getUserId())
-                .studentNo(student.getStudentNo())
-                .schoolId(student.getSchoolId())
-                .name(student.getName())
-                .gender(student.getGender())
-                .genderName(getGenderName(student.getGender()))
-                .birthDate(student.getBirthDate())
-                .enrollmentDate(student.getEnrollmentDate())
-                .status(student.getStatus())
-                .statusName(getStatusName(student.getStatus()))
-                .createdAt(student.getCreatedAt())
-                .updatedAt(student.getUpdatedAt())
-                .build();
+    private Map<Long, List<StudentResponse.ClassInfo>> loadClasses(List<Student> students) {
+        Set<Long> studentIds = students.stream()
+                .map(Student::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return classStudentMapper.selectClassRowsByStudentIds(studentIds).stream()
+                .collect(Collectors.groupingBy(
+                        StudentClassRow::getStudentId,
+                        Collectors.mapping(row -> StudentResponse.ClassInfo.builder()
+                                .classId(row.getClassId())
+                                .className(row.getClassName())
+                                .gradeName(row.getGradeName())
+                                .build(), Collectors.toList())));
+    }
+
+    /**
+     * 一次查出这批学生涉及的学校名称
+     */
+    private Map<Long, String> loadSchoolNames(List<Student> students) {
+        Set<Long> schoolIds = students.stream()
+                .map(Student::getSchoolId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (schoolIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return schoolMapper.selectBatchIds(schoolIds).stream()
+                .filter(school -> school.getSchoolName() != null)
+                .collect(Collectors.toMap(School::getId, School::getSchoolName, (a, b) -> a));
     }
 
     /**

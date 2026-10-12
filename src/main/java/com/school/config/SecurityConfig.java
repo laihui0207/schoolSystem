@@ -3,6 +3,7 @@ package com.school.config;
 import com.school.security.filter.JwtAuthenticationFilter;
 import com.school.security.handler.JwtAccessDeniedHandler;
 import com.school.security.handler.JwtAuthenticationEntryPoint;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
-import jakarta.servlet.DispatcherType;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
@@ -46,14 +46,20 @@ public class SecurityConfig {
 
     /**
      * 白名单路径（不需要认证）
+     * <p>
+     * 路径相对于 context-path（/api/v1）。2026-10-12 起所有 Controller 的
+     * @RequestMapping 均不再带 /api 段，前缀由 context-path 统一提供，
+     * 这里也不要再写 /api/...。
+     * <p>
+     * /auth/refresh 必须放行：刷新恰恰发生在 access token 已过期之时，
+     * 若要求携带有效 access token 才能刷新，refresh token 就失去存在意义。
+     * 该端点自身会校验 refresh token 的签名、有效期与 type 声明。
      */
     private static final String[] WHITE_LIST = {
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/captcha",
             "/auth/login",
             "/auth/register",
             "/auth/captcha",
+            "/auth/refresh",
             "/doc.html",
             "/swagger-ui.html",
             "/swagger-ui/**",
@@ -79,7 +85,9 @@ public class SecurityConfig {
 
                 // 配置授权规则
                 .authorizeHttpRequests(auth -> auth
-                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // ERROR 转发不再走认证：否则 STATELESS 下认证上下文不跨 dispatch 保留，
+                        // 任何 404/500 都会被包装成 401「未认证」，掩盖真实错误
+                        .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
                         .requestMatchers(WHITE_LIST).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -131,7 +139,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

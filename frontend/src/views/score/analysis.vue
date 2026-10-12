@@ -4,14 +4,19 @@
       <template #header>成绩分析</template>
 
       <el-form :model="filter" inline>
-        <el-form-item label="考试">
-          <el-select v-model="filter.examId" placeholder="请选择考试" clearable style="width:200px" @change="onExamChange">
-            <el-option v-for="e in exams" :key="e.id" :label="e.examName" :value="e.id" />
+        <el-form-item v-if="isSuperAdmin" label="学校">
+          <el-select v-model="filter.schoolId" placeholder="请选择学校" clearable style="width:180px" @change="onSchoolChange">
+            <el-option v-for="s in schools" :key="s.id" :label="s.schoolName" :value="s.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="班级">
-          <el-select v-model="filter.classId" placeholder="请选择班级" clearable style="width:160px">
+          <el-select v-model="filter.classId" placeholder="请选择班级" clearable style="width:160px" :disabled="isSuperAdmin && !filter.schoolId">
             <el-option v-for="c in classes" :key="c.id" :label="c.className" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="考试">
+          <el-select v-model="filter.examId" placeholder="请选择考试" clearable style="width:200px">
+            <el-option v-for="e in exams" :key="e.id" :label="e.examName" :value="e.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="科目">
@@ -59,24 +64,33 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getScoreStatistics, getScoreDistribution } from '@/api/score'
 import { getExamList } from '@/api/exam'
-import { getAllSubjects } from '@/api/subject'
+import { getSubjectList } from '@/api/subject'
 import { getClassList } from '@/api/class'
+import { getSchoolList } from '@/api/school'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const isSuperAdmin = userStore.userInfo?.userType === 1
 
 const loading = ref(false)
 const exams = ref<any[]>([])
 const subjects = ref<any[]>([])
 const classes = ref<any[]>([])
+const schools = ref<any[]>([])
 const stats = ref<any>(null)
 const distribution = ref<any[]>([])
 
 const filter = reactive({
+  schoolId: isSuperAdmin ? undefined as number | undefined : userStore.userInfo?.schoolId,
   examId: undefined as number | undefined,
   classId: undefined as number | undefined,
   subjectId: undefined as number | undefined
 })
 
-const canQuery = computed(() => filter.examId && filter.classId && filter.subjectId)
-
+const canQuery = computed(() => {
+  if (isSuperAdmin && !filter.schoolId) return false
+  return filter.examId && filter.classId && filter.subjectId
+})
 const totalStudents = computed(() => distribution.value.reduce((s, r) => s + r.count, 0))
 
 const statItems = computed(() => stats.value ? [
@@ -85,17 +99,28 @@ const statItems = computed(() => stats.value ? [
   { label: '平均分', value: stats.value.averageScore?.toFixed(1) ?? '-' },
   { label: '最高分', value: stats.value.highestScore },
   { label: '最低分', value: stats.value.lowestScore },
-  { label: '及格率', value: stats.value.passRate != null ? (stats.value.passRate * 100).toFixed(1) + '%' : '-' },
+  // ponytail: F-02 — 后端 passRate 已是百分数 0-100，再 ×100 会显示 8500.0%
+  { label: '及格率', value: stats.value.passRate != null ? Number(stats.value.passRate).toFixed(1) + '%' : '-' },
 ] : [])
 
-const onExamChange = async (examId: number) => {
+const onSchoolChange = async (schoolId: number) => {
   filter.classId = undefined
+  filter.subjectId = undefined
+  filter.examId = undefined
   classes.value = []
-  if (!examId) return
-  const exam = exams.value.find(e => e.id === examId)
-  if (!exam?.gradeIds?.length) return
-  const res = await getClassList({ gradeId: exam.gradeIds[0], pageNum: 1, pageSize: 1000 }) as any
-  classes.value = res?.records ?? []
+  subjects.value = []
+  exams.value = []
+  stats.value = null
+  distribution.value = []
+  if (!schoolId) return
+  const [classRes, subjectRes, examRes] = await Promise.all([
+    getClassList({ schoolId, pageNum: 1, pageSize: 1000 }) as any,
+    getSubjectList({ schoolId, pageNum: 1, pageSize: 1000 }) as any,
+    getExamList({ schoolId, pageNum: 1, pageSize: 1000 }) as any
+  ])
+  classes.value = classRes?.records ?? []
+  subjects.value = subjectRes?.records ?? []
+  exams.value = examRes?.records ?? []
 }
 
 const loadAnalysis = async () => {
@@ -121,18 +146,30 @@ const handleReset = () => {
   filter.examId = undefined
   filter.classId = undefined
   filter.subjectId = undefined
-  classes.value = []
+  if (isSuperAdmin) {
+    filter.schoolId = undefined
+    classes.value = []
+    subjects.value = []
+  }
   stats.value = null
   distribution.value = []
 }
 
 onMounted(async () => {
-  const [examRes, subjectRes] = await Promise.all([
-    getExamList({ pageNum: 1, pageSize: 1000 }) as any,
-    getAllSubjects()
-  ])
-  exams.value = examRes?.records ?? []
-  subjects.value = subjectRes ?? []
+  const schoolId = userStore.userInfo?.schoolId
+  if (isSuperAdmin) {
+    const schoolRes = await getSchoolList({ pageNum: 1, pageSize: 1000 }) as any
+    schools.value = schoolRes?.records ?? []
+  } else if (schoolId) {
+    const [classRes, subjectRes, examRes] = await Promise.all([
+      getClassList({ schoolId, pageNum: 1, pageSize: 1000 }) as any,
+      getSubjectList({ schoolId, pageNum: 1, pageSize: 1000 }) as any,
+      getExamList({ schoolId, pageNum: 1, pageSize: 1000 }) as any
+    ])
+    classes.value = classRes?.records ?? []
+    subjects.value = subjectRes?.records ?? []
+    exams.value = examRes?.records ?? []
+  }
 })
 </script>
 

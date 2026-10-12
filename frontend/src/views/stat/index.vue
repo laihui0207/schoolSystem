@@ -125,10 +125,11 @@ const classStatItems = computed(() => {
   if (!s) return []
   return [
     { label: '平均分', value: s.averageScore != null ? Number(s.averageScore).toFixed(1) : '-' },
-    { label: '最高分', value: s.highestScore ?? '-' },
-    { label: '最低分', value: s.lowestScore ?? '-' },
-    { label: '及格率', value: s.passRate != null ? (s.passRate * 100).toFixed(1) + '%' : '-' },
-    { label: '优秀率', value: s.excellentRate != null ? (s.excellentRate * 100).toFixed(1) + '%' : '-' },
+    // ponytail: F-03 — ClassStatResponse 字段是 maxScore/minScore；passRate/excellentRate 已是百分数，不再 ×100
+    { label: '最高分', value: s.maxScore ?? '-' },
+    { label: '最低分', value: s.minScore ?? '-' },
+    { label: '及格率', value: s.passRate != null ? Number(s.passRate).toFixed(1) + '%' : '-' },
+    { label: '优秀率', value: s.excellentRate != null ? Number(s.excellentRate).toFixed(1) + '%' : '-' },
   ]
 })
 
@@ -210,8 +211,8 @@ const renderGradeChart = (data: any) => {
   if (!gradeChartEl.value) return
   gradeChart?.dispose()
   gradeChart = echarts.init(gradeChartEl.value)
-  // expect data.classSummaries = [{className, averageScore}] or similar
-  const items: any[] = data.classSummaries ?? data.classes ?? data.classStats ?? []
+  // GradeStatResponse.classComparisons = [{classId, className, averageScore, maxScore, minScore, passRate, excellentRate, rank}]
+  const items: any[] = data.classComparisons ?? []
   if (!items.length) {
     gradeChart.setOption({
       title: { text: '暂无班级数据', left: 'center', top: 'center', textStyle: { color: '#909399', fontSize: 14 } },
@@ -302,8 +303,8 @@ const renderTrendChart = (data: any) => {
   if (!trendChartEl.value) return
   trendChart?.dispose()
   trendChart = echarts.init(trendChartEl.value)
-  // expect data = [{examName, totalScore}] or {trends:[...]}
-  const items: any[] = Array.isArray(data) ? data : (data?.trends ?? data?.records ?? [])
+  // ponytail: 契约 3 — StudentTrendResponse 的趋势数组字段是 examTrends，之前读 trends/records 永远为空
+  const items: any[] = Array.isArray(data) ? data : (data?.examTrends ?? [])
   if (!items.length) {
     trendChart.setOption({
       title: { text: '暂无历史趋势', left: 'center', top: 'center', textStyle: { color: '#909399', fontSize: 14 } },

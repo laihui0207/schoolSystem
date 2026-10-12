@@ -5,6 +5,7 @@ import com.school.common.result.Result;
 import com.school.module.subject.dto.SubjectCreateRequest;
 import com.school.module.subject.dto.SubjectQueryRequest;
 import com.school.module.subject.dto.SubjectResponse;
+import com.school.module.subject.dto.SubjectUpdateRequest;
 import com.school.module.subject.service.SubjectService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/subjects")
+@RequestMapping("/subjects")
 @RequiredArgsConstructor
 public class SubjectController {
 
@@ -34,9 +35,10 @@ public class SubjectController {
         return Result.success(subjectService.getById(id));
     }
 
+    // ponytail: 编辑绑 UpdateRequest 而非 CreateRequest，否则 schoolId/subjectCode 的 @NotNull/@NotBlank 让前端 PUT 必 400
     @PutMapping("/{id}")
     public Result<SubjectResponse> update(@PathVariable Long id,
-                                          @Valid @RequestBody SubjectCreateRequest request) {
+                                          @Valid @RequestBody SubjectUpdateRequest request) {
         return Result.success(subjectService.update(id, request));
     }
 

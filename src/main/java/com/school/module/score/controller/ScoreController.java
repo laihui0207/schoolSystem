@@ -6,6 +6,7 @@ import com.school.module.score.dto.*;
 import com.school.module.score.service.ScoreService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/scores")
+@RequestMapping("/scores")
 @RequiredArgsConstructor
 public class ScoreController {
 
@@ -35,9 +36,10 @@ public class ScoreController {
      * 批量成绩录入
      */
     @PostMapping("/batch-input")
-    public Result<Integer> batchInputScores(@Valid @RequestBody ScoreBatchInputRequest request) {
-        Integer count = scoreService.batchInputScores(request);
-        return Result.success("成功录入" + count + "条成绩", count);
+    public Result<BatchInputResult> batchInputScores(@Valid @RequestBody ScoreBatchInputRequest request) {
+        // ponytail: 契约 1——返回逐条失败明细而不是一个数字，前端才能提示具体哪位学生没录进去
+        BatchInputResult result = scoreService.batchInputScores(request);
+        return Result.success(result);
     }
 
     /**
@@ -81,7 +83,9 @@ public class ScoreController {
     /**
      * 计算排名
      */
+    // ponytail: B-5——这是回写全场考试排名的写操作，学生/任课教师不得触发；与 publish 一样只给管理员
     @PostMapping("/calculate-rankings")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
     public Result<Void> calculateRankings(
             @RequestParam Long examId,
             @RequestParam(required = false) Long subjectId) {
@@ -98,58 +102,55 @@ public class ScoreController {
         return Result.success();
     }
 
-    /** 班级成绩列表 */
     @GetMapping("/class-list")
     public Result<List<ClassScoreItemDto>> getClassScoreList(
             @RequestParam Long examId,
             @RequestParam Long classId,
+            // ponytail: D-ai-5——科目可选，为空返回该班全部科目的成绩项
             @RequestParam(required = false) Long subjectId) {
         return Result.success(scoreService.getClassScoreList(examId, classId, subjectId));
     }
 
-    /** 成绩统计摘要 */
     @GetMapping("/statistics")
-    public Result<ScoreStatisticsDto> getStatistics(
+    public Result<ScoreStatisticsDto> getScoreStatistics(
             @RequestParam Long examId,
             @RequestParam Long classId,
-            @RequestParam(required = false) Long subjectId) {
+            @RequestParam Long subjectId) {
         return Result.success(scoreService.getScoreStatistics(examId, classId, subjectId));
     }
 
-    /** 审核列表 */
     @GetMapping("/review-list")
-    public Result<List<ReviewListItemDto>> getReviewList(
+    public Result<Page<ReviewListItemDto>> getReviewList(
             @RequestParam(required = false) Long examId,
             @RequestParam(required = false) Long classId,
             @RequestParam(required = false) Long subjectId,
-            @RequestParam(required = false) Long schoolId) {
-        return Result.success(scoreService.getReviewList(examId, classId, subjectId, schoolId));
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") Long pageNum,
+            @RequestParam(defaultValue = "10") Long pageSize) {
+        return Result.success(scoreService.getReviewList(examId, classId, subjectId, status, pageNum, pageSize));
     }
 
-    /** 审核详情 */
     @GetMapping("/review-detail")
     public Result<ReviewDetailDto> getReviewDetail(
             @RequestParam Long examId,
             @RequestParam Long classId,
-            @RequestParam(required = false) Long subjectId) {
+            @RequestParam Long subjectId) {
         return Result.success(scoreService.getReviewDetail(examId, classId, subjectId));
     }
 
-    /** 审核历史 */
     @GetMapping("/review-history")
     public Result<List<ReviewHistoryDto>> getReviewHistory(
             @RequestParam Long examId,
             @RequestParam Long classId,
-            @RequestParam(required = false) Long subjectId) {
+            @RequestParam Long subjectId) {
         return Result.success(scoreService.getReviewHistory(examId, classId, subjectId));
     }
 
-    /** 分数段分布 */
     @GetMapping("/distribution")
-    public Result<List<ScoreDistributionDto>> getDistribution(
+    public Result<List<ScoreDistributionDto>> getScoreDistribution(
             @RequestParam Long examId,
             @RequestParam Long classId,
-            @RequestParam(required = false) Long subjectId) {
+            @RequestParam Long subjectId) {
         return Result.success(scoreService.getScoreDistribution(examId, classId, subjectId));
     }
 

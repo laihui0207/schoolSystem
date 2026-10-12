@@ -28,15 +28,13 @@ public class LoginRequest implements Serializable {
     private String password;
 
     /**
-     * 验证码
+     * 验证码（captcha.enabled=false 时可传任意值）
      */
-    @NotBlank(message = "验证码不能为空")
     private String captcha;
 
     /**
-     * 验证码Key
+     * 验证码Key（captcha.enabled=false 时可传任意值）
      */
-    @NotBlank(message = "验证码Key不能为空")
     private String captchaKey;
 
 }

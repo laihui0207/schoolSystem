@@ -14,7 +14,7 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/config")
+@RequestMapping("/configs")
 @RequiredArgsConstructor
 public class ConfigController {
 
@@ -67,3 +67,4 @@ public class ConfigController {
     }
 
 }
+

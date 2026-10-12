@@ -10,11 +10,10 @@ INSERT INTO sys_role (role_code, role_name, description, school_id) VALUES
 ('ROLE_STUDENT', '学生', '查看个人成绩', NULL),
 ('ROLE_PARENT', '家长', '查看孩子成绩', NULL);
 
--- 插入超级管理员用户（密码: admin123，需要BCrypt加密）
--- 这里使用在线BCrypt工具生成的密码: $2a$10$xQH9O.NJQ8JJJxJxJxJxJxJxJxJxJxJxJxJxJxJxJxJxJxJxJ
--- 实际使用时需要通过程序生成正确的BCrypt密码
+-- 插入超级管理员用户（密码: admin123）
+-- BCrypt加密后的密码
 INSERT INTO sys_user (username, password, phone, real_name, user_type, status) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '13800138000', '系统管理员', 1, 1);
+('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKLV.dDu', '13800138000', '系统管理员', 1, 1);
 
 -- 获取刚插入的用户ID和角色ID，并建立关联
 INSERT INTO sys_user_role (user_id, role_id)

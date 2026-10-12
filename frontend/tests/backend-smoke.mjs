@@ -2,7 +2,9 @@
 // Green = 2xx, Yellow = 4xx with expected validation message, Red = 500 or unexpected.
 import fs from 'node:fs'
 
-const BASE = 'http://localhost:8080/api'
+// server.servlet.context-path is /api/v1. Bare /api is only the Vite proxy
+// prefix, which the backend knows nothing about — using it 404s every route.
+const BASE = 'http://localhost:8080/api/v1'
 const TOKEN = process.env.TOKEN
 const ids = JSON.parse(fs.readFileSync('/tmp/ids.json', 'utf8'))
 
@@ -36,7 +38,8 @@ const test = async (name, method, url, body, expectStatus) => {
 
 console.log('\n=== AUTH ===')
 await test('captcha', 'GET', '/auth/captcha')
-await test('logout', 'POST', '/auth/logout')
+// NOTE: /auth/logout must run LAST — it deletes token:<jwt> from Redis, so
+// calling it here would 401 every subsequent test in this file.
 
 console.log('\n=== SCHOOL ===')
 await test('school-list', 'GET', `/schools?pageNum=1&pageSize=10`)
@@ -98,5 +101,8 @@ await test('score-statistics', 'GET', `/scores/statistics?examId=${ids.examId}&c
 await test('score-distribution', 'GET', `/scores/distribution?examId=${ids.examId}&classId=${ids.classId}&subjectId=${ids.subjectIds[0]}`, null, 400)
 await test('score-review-detail', 'GET', `/scores/review-detail?examId=${ids.examId}&classId=${ids.classId}&subjectId=${ids.subjectIds[0]}`, null, 400)
 await test('score-review-history', 'GET', `/scores/review-history?examId=${ids.examId}&classId=${ids.classId}&subjectId=${ids.subjectIds[0]}`, null, 400)
+
+console.log('\n=== AUTH (logout last: it invalidates the token) ===')
+await test('logout', 'POST', '/auth/logout')
 
 console.log('\n✓ = 2xx, ~ = expected 4xx, ✗ = 5xx or unexpected')

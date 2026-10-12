@@ -5,6 +5,7 @@ import com.school.common.result.Result;
 import com.school.module.grade.dto.GradeCreateRequest;
 import com.school.module.grade.dto.GradeQueryRequest;
 import com.school.module.grade.dto.GradeResponse;
+import com.school.module.grade.dto.GradeUpdateRequest;
 import com.school.module.grade.service.GradeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +19,7 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/grades")
+@RequestMapping("/grades")
 @RequiredArgsConstructor
 public class GradeController {
 
@@ -34,9 +35,10 @@ public class GradeController {
         return Result.success(gradeService.getById(id));
     }
 
+    // ponytail: 编辑绑 UpdateRequest 而非 CreateRequest，否则 schoolId @NotNull 让前端只发更新字段的 PUT 必 400
     @PutMapping("/{id}")
     public Result<GradeResponse> update(@PathVariable Long id,
-                                        @Valid @RequestBody GradeCreateRequest request) {
+                                        @Valid @RequestBody GradeUpdateRequest request) {
         return Result.success(gradeService.update(id, request));
     }
 

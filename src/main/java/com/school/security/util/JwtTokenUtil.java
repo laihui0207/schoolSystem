@@ -33,6 +33,9 @@ public class JwtTokenUtil {
     @Value("${app.jwt.refresh-expiration}")
     private Long refreshExpiration;
 
+    private static final String CLAIM_TYPE = "type";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
+
     /**
      * 生成访问令牌
      */
@@ -50,7 +53,7 @@ public class JwtTokenUtil {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("username", username);
-        claims.put("type", "refresh");
+        claims.put(CLAIM_TYPE, REFRESH_TOKEN_TYPE);
         return createToken(claims, refreshExpiration);
     }
 
@@ -124,6 +127,37 @@ public class JwtTokenUtil {
             log.error("Token验证失败: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * 是否为刷新令牌（claims.type == refresh）
+     * <p>
+     * 访问令牌没有 type 声明，解析失败的令牌也视为非刷新令牌。
+     */
+    public boolean isRefreshToken(String token) {
+        // ponytail: 刷新接口只校验签名/过期的话，access token 也能换新 token，刷新令牌的长有效期就失去意义
+        try {
+            Claims claims = getClaimsFromToken(token);
+            return REFRESH_TOKEN_TYPE.equals(claims.get(CLAIM_TYPE, String.class));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 访问令牌有效期（毫秒），供 Redis 中 token 记录的 TTL 使用
+     */
+    public Long getExpirationMillis() {
+        // ponytail: Redis TTL 与 JWT 过期时间来自同一配置项，避免两处 24h 写死后改配置只生效一半
+        return expiration;
+    }
+
+    /**
+     * 刷新令牌有效期（毫秒），供 Redis 中 refresh token 登记的 TTL 使用
+     */
+    public Long getRefreshExpirationMillis() {
+        // ponytail: refresh token 登记进 Redis 后 TTL 必须与 JWT 自身过期一致，登出/轮换语义才成立
+        return refreshExpiration;
     }
 
     /**

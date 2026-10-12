@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * 单科全校统计响应
+ * 科目成绩统计响应（某次考试的单科维度）
  *
  * @author School System
  */
@@ -15,50 +15,101 @@ import java.util.List;
 @Builder
 public class SubjectStatResponse {
 
-    private Long examId;
-    private String examName;
+    /**
+     * 科目ID
+     */
     private Long subjectId;
+
+    /**
+     * 科目名称
+     */
     private String subjectName;
 
-    /** 参与统计人数 */
+    /**
+     * 考试ID
+     */
+    private Long examId;
+
+    /**
+     * 参考人数（含缺考）
+     */
     private Integer totalStudents;
 
-    /** 平均分 */
+    /**
+     * 实际参考人数
+     */
+    private Integer actualStudents;
+
+    /**
+     * 平均分
+     */
     private BigDecimal averageScore;
 
-    /** 最高分 */
+    /**
+     * 最高分
+     */
     private BigDecimal maxScore;
 
-    /** 最低分 */
+    /**
+     * 最低分
+     */
     private BigDecimal minScore;
 
-    /** 标准差 */
-    private BigDecimal stdDev;
-
-    /** 及格人数 */
-    private Integer passCount;
-
-    /** 及格率(%) */
+    /**
+     * 及格率(%)
+     */
     private BigDecimal passRate;
 
-    /** 优秀人数（>=85分） */
-    private Integer excellentCount;
-
-    /** 优秀率(%) */
+    /**
+     * 优秀率(%)
+     */
     private BigDecimal excellentRate;
 
-    /** 各班平均分 */
-    private List<ClassAvg> classAverages;
+    /**
+     * 标准差（总体）
+     */
+    private BigDecimal standardDeviation;
 
-    /** 分数段分布 */
+    /**
+     * 各班级平均分
+     */
+    private List<ClassAverage> classAverages;
+
+    /**
+     * 各年级分数分布（箱线图五数）
+     */
+    private List<GradeBox> gradeBoxes;
+
+    /**
+     * 分数段分布
+     */
     private List<ClassStatResponse.ScoreRange> scoreRanges;
 
+    /**
+     * 班级平均分
+     */
     @Data
     @Builder
-    public static class ClassAvg {
+    public static class ClassAverage {
         private Long classId;
         private String className;
         private BigDecimal averageScore;
     }
 
+    /**
+     * 年级箱线图数据
+     */
+    @Data
+    @Builder
+    public static class GradeBox {
+        private Long gradeId;
+        private String gradeName;
+        private BigDecimal min;
+        private BigDecimal q1;
+        private BigDecimal median;
+        private BigDecimal q3;
+        private BigDecimal max;
+    }
+
 }
+

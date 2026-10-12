@@ -1,19 +1,22 @@
 package com.school.ai.tools;
 
+import com.school.ai.service.AiUserContext;
 import com.school.common.exception.BusinessException;
 import com.school.common.result.ResultCode;
 import com.school.security.model.LoginUser;
 import com.school.security.service.TeacherScopeService;
+import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.ReactiveSecurityContextHolder;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
+
 /**
  * AI 工具层权限检查器
- * 兼容 ThreadLocal（Servlet 线程）和 Reactor Context（工具执行线程）
+ * 优先从 ToolContext（官方跨线程机制）读用户，降级到 AiUserContext 和 SecurityContextHolder
  */
 @Component
 @RequiredArgsConstructor
@@ -22,46 +25,51 @@ public class AiPermissionChecker {
     private final TeacherScopeService teacherScopeService;
 
     /**
-     * 获取当前登录用户，兼容两种线程模型：
-     * 1. ThreadLocal —— Servlet 线程直接可读
-     * 2. Reactor Context —— Spring AI 工具回调线程通过 contextWrite 传入
+     * 从 ToolContext 提取 LoginUser，并同步设置到 SecurityContextHolder
+     * 这样工具调用链下游的 Service（StatService、ScoreService 等）里的 SecurityUtils 也能正常读取
      */
-    public LoginUser currentUser() {
-        // 优先走 ThreadLocal（Servlet 线程）
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getPrincipal() instanceof LoginUser u) {
-            return u;
-        }
-        // 降级走 Reactor Context（工具回调线程）
-        // block() 在 Reactor 线程上调用是安全的，这里只是读一个已存在的 Mono.just(...)
-        SecurityContext reactiveCtx = ReactiveSecurityContextHolder.getContext().block();
-        if (reactiveCtx != null
-                && reactiveCtx.getAuthentication() != null
-                && reactiveCtx.getAuthentication().getPrincipal() instanceof LoginUser u) {
-            return u;
-        }
-        throw new BusinessException(ResultCode.UNAUTHORIZED);
+    public LoginUser currentUser(@Nullable ToolContext toolContext) {
+        LoginUser user = resolveUser(toolContext);
+        // ponytail: 同步设置到 SecurityContextHolder，让下游 Service 的 SecurityUtils 可用
+        SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        user, null, user.getAuthorities()
+                )
+        );
+        return user;
     }
 
-    public void assertCanViewClass(Long classId) {
-        var user = currentUser();
+    private LoginUser resolveUser(@Nullable ToolContext toolContext) {
+        if (toolContext != null) {
+            Object user = toolContext.getContext().get("loginUser");
+            if (user instanceof LoginUser loginUser) return loginUser;
+        }
+        LoginUser fromContext = AiUserContext.get();
+        if (fromContext != null) return fromContext;
+        return SecurityUtils.currentUser();
+    }
+
+    public void assertCanViewClass(@Nullable ToolContext toolContext, Long classId) {
+        var user = currentUser(toolContext);
         if (user.isSuperAdmin()) return;
-        if (user.getUserType() == 2) return;
+        if (user.isSchoolAdmin()) return;
         if (user.isTeacher()) {
-            if (classId != null && !teacherScopeService.currentAllowedClassIds().contains(classId)) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "无权查看该班级数据");
+            if (classId != null) {
+                Set<Long> allowed = teacherScopeService.allowedClassIdsFor(user.getTeacherId());
+                if (!allowed.contains(classId)) {
+                    throw new BusinessException(ResultCode.FORBIDDEN, "无权查看该班级数据");
+                }
             }
             return;
         }
-        if (classId != null) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "无权查看班级数据");
-        }
+        // ponytail: 学生/家长不能看任何班级或全校维度的数据；classId=null 表示"全校范围"，更不能放行（之前 null 会漏过）
+        throw new BusinessException(ResultCode.FORBIDDEN, "无权查看班级数据");
     }
 
-    public void assertCanViewStudent(Long studentId) {
-        var user = currentUser();
+    public void assertCanViewStudent(@Nullable ToolContext toolContext, Long studentId) {
+        var user = currentUser(toolContext);
         if (user.isSuperAdmin()) return;
-        if (user.getUserType() == 2) return;
+        if (user.isSchoolAdmin()) return;
         if (user.isStudent()) {
             if (!studentId.equals(user.getStudentId())) {
                 throw new BusinessException(ResultCode.FORBIDDEN, "只能查看自己的成绩");
@@ -72,11 +80,17 @@ public class AiPermissionChecker {
         throw new BusinessException(ResultCode.FORBIDDEN, "无权查看该学生数据");
     }
 
-    public void assertIsAdmin() {
-        var user = currentUser();
-        if (!user.isSuperAdmin() && user.getUserType() != 2) {
+    public void assertIsAdmin(@Nullable ToolContext toolContext) {
+        var user = currentUser(toolContext);
+        if (!user.isSuperAdmin() && !user.isSchoolAdmin()) {
             throw new BusinessException(ResultCode.FORBIDDEN, "仅管理员可执行此操作");
         }
+    }
+
+    public void assertIsHeadTeacherOrAdmin(@Nullable ToolContext toolContext) {
+        var user = currentUser(toolContext);
+        if (user.isSuperAdmin() || user.isSchoolAdmin() || user.isHeadTeacher()) return;
+        throw new BusinessException(ResultCode.FORBIDDEN, "仅班主任或管理员可执行此操作");
     }
 
 }

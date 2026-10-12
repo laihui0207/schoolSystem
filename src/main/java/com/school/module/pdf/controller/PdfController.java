@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/pdf")
+@RequestMapping("/pdf")
 @RequiredArgsConstructor
 public class PdfController {
 

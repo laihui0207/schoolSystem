@@ -115,3 +115,11 @@ export const assignClass = (studentId: number, classId: number) => {
     params: { classId }
   })
 }
+
+export const transferClass = (studentId: number, fromClassId: number, toClassId: number) => {
+  return request({
+    url: `/students/${studentId}/transfer-class`,
+    method: 'post',
+    params: { fromClassId, toClassId }
+  })
+}

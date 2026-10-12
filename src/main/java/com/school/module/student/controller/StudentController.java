@@ -9,6 +9,7 @@ import com.school.module.student.dto.StudentUpdateRequest;
 import com.school.module.student.service.StudentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,7 +20,7 @@ import java.util.List;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/students")
+@RequestMapping("/students")
 @RequiredArgsConstructor
 public class StudentController {
 
@@ -86,6 +87,7 @@ public class StudentController {
     /**
      * 学生分班
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('SCHOOL_ADMIN') or principal.headTeacher")
     @PostMapping("/{studentId}/assign-class")
     public Result<Void> assignToClass(
             @PathVariable Long studentId,
@@ -97,6 +99,7 @@ public class StudentController {
     /**
      * 学生转班
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('SCHOOL_ADMIN') or principal.headTeacher")
     @PostMapping("/{studentId}/transfer-class")
     public Result<Void> transferClass(
             @PathVariable Long studentId,
@@ -109,6 +112,7 @@ public class StudentController {
     /**
      * 移除学生的班级
      */
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('SCHOOL_ADMIN') or principal.headTeacher")
     @DeleteMapping("/{studentId}/class/{classId}")
     public Result<Void> removeFromClass(
             @PathVariable Long studentId,

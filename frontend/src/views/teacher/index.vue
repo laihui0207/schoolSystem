@@ -52,8 +52,8 @@
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">编辑</el-button>
-            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)">删除</el-button>
+            <el-button link type="primary" :icon="Edit" @click="handleEdit(row as Teacher)">编辑</el-button>
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(row as Teacher)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -136,9 +136,15 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80">
+              <el-table-column label="操作" width="140">
                 <template #default="{ row }">
-                  <el-button link type="danger" size="small" @click="handleRemoveAssignment(row)">移除</el-button>
+                  <el-button
+                    v-if="!row.isHeadTeacher"
+                    link type="primary" size="small"
+                    @click="handleSetHeadTeacher(row as ClassAssignment)"
+                  >设为班主任</el-button>
+                  <el-tag v-else type="warning" size="small" style="margin-right:4px">班主任</el-tag>
+                  <el-button link type="danger" size="small" @click="handleRemoveAssignment(row as ClassAssignment)">移除</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -168,7 +174,7 @@ import {
 } from '@/api/teacher'
 import { getSchoolList, type School } from '@/api/school'
 import { getAllSubjects, type Subject } from '@/api/subject'
-import { getClassList, type Class } from '@/api/class'
+import { getClassList, setHeadTeacher, type Class } from '@/api/class'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -297,6 +303,15 @@ const handleAddAssignment = async () => {
     newAssignment.subjectId = undefined
     await loadClassAssignments(form.id)
   } catch { ElMessage.error('添加失败') }
+}
+
+const handleSetHeadTeacher = async (row: ClassAssignment) => {
+  if (!form.id) return
+  try {
+    await setHeadTeacher(row.classId, form.id)
+    ElMessage.success('已设为班主任')
+    await loadClassAssignments(form.id)
+  } catch { ElMessage.error('设置失败') }
 }
 
 const handleRemoveAssignment = async (row: ClassAssignment) => {

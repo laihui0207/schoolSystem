@@ -1,10 +1,5 @@
 import request from '@/utils/request'
 
-/**
- * 对应后端 TeacherResponse
- * 后端无 teacherName / subjectIds[] / phone / email / hireDate
- * status: 0=离职, 1=在职
- */
 export interface Teacher {
   id?: number
   userId?: number
@@ -18,8 +13,18 @@ export interface Teacher {
   subjectName?: string
   status?: number
   statusName?: string
+  headTeacher?: boolean
+  classes?: ClassAssignment[]
   createdAt?: string
   updatedAt?: string
+}
+
+export interface ClassAssignment {
+  classId: number
+  className: string
+  subjectId: number
+  subjectName: string
+  isHeadTeacher: boolean
 }
 
 export interface TeacherQuery {
@@ -37,60 +42,34 @@ export interface TeacherPage {
   total: number
 }
 
-export const getTeacherList = (params: TeacherQuery) => {
-  return request<TeacherPage>({
-    url: '/teachers',
-    method: 'get',
-    params
-  })
-}
+export const getTeacherList = (params: TeacherQuery) =>
+  request<TeacherPage>({ url: '/teachers', method: 'get', params })
 
-export const getTeacherDetail = (id: number) => {
-  return request<Teacher>({
-    url: `/teachers/${id}`,
-    method: 'get'
-  })
-}
+export const getTeacherDetail = (id: number) =>
+  request<Teacher>({ url: `/teachers/${id}`, method: 'get' })
 
-/**
- * ponytail: 只发 TeacherCreateRequest 认的字段
- * teacherNo / schoolId / name 必填
- */
-export const createTeacher = (data: Teacher) => {
-  return request<Teacher>({
+export const createTeacher = (data: Teacher) =>
+  request<Teacher>({
     url: '/teachers',
     method: 'post',
-    data: {
-      teacherNo: data.teacherNo,
-      schoolId: data.schoolId,
-      name: data.name,
-      gender: data.gender,
-      subjectId: data.subjectId,
-      userId: data.userId
-    }
+    data: { teacherNo: data.teacherNo, schoolId: data.schoolId, name: data.name, gender: data.gender, subjectId: data.subjectId, userId: data.userId }
   })
-}
 
-/**
- * ponytail: 只发 TeacherUpdateRequest 认的字段
- * status: 0=离职, 1=在职
- */
-export const updateTeacher = (id: number, data: Teacher) => {
-  return request<Teacher>({
+export const updateTeacher = (id: number, data: Teacher) =>
+  request<Teacher>({
     url: `/teachers/${id}`,
     method: 'put',
-    data: {
-      name: data.name,
-      gender: data.gender,
-      subjectId: data.subjectId,
-      status: data.status
-    }
+    data: { name: data.name, gender: data.gender, subjectId: data.subjectId, status: data.status }
   })
-}
 
-export const deleteTeacher = (id: number) => {
-  return request({
-    url: `/teachers/${id}`,
-    method: 'delete'
-  })
-}
+export const deleteTeacher = (id: number) =>
+  request({ url: `/teachers/${id}`, method: 'delete' })
+
+export const getClassAssignments = (teacherId: number) =>
+  request<ClassAssignment[]>({ url: `/teachers/${teacherId}/classes`, method: 'get' })
+
+export const assignClass = (teacherId: number, classId: number, subjectId: number) =>
+  request({ url: `/teachers/${teacherId}/classes`, method: 'post', params: { classId, subjectId } })
+
+export const removeClassAssignment = (teacherId: number, classId: number, subjectId: number) =>
+  request({ url: `/teachers/${teacherId}/classes`, method: 'delete', params: { classId, subjectId } })

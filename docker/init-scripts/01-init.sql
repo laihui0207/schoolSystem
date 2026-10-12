@@ -10,3 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 授权
 GRANT ALL PRIVILEGES ON DATABASE school_system TO school_admin;
+
+-- 集成测试专用库（与 school_system 隔离，避免测试污染开发数据；见 application-test.yml）
+CREATE DATABASE school_system_test;
+GRANT ALL PRIVILEGES ON DATABASE school_system_test TO school_admin;

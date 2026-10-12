@@ -2,9 +2,11 @@ import request from '@/utils/request'
 
 export interface DictType {
   id?: number
-  dictType: string
   dictName: string
+  dictType: string
+  status: 0 | 1  // 0-正常 1-停用
   remark?: string
+  createdAt?: string
 }
 
 export interface DictData {
@@ -12,26 +14,18 @@ export interface DictData {
   dictType: string
   dictLabel: string
   dictValue: string
-  sort?: number
+  dictSort: number
+  status: 0 | 1  // 0-正常 1-停用
   remark?: string
+  createdAt?: string
 }
 
 /**
- * 查询所有字典类型
+ * 获取字典类型列表
  */
 export const getDictTypeList = () => {
   return request({
-    url: '/dict/type',
-    method: 'get'
-  })
-}
-
-/**
- * 根据字典类型查询字典数据
- */
-export const getDictDataByType = (dictType: string) => {
-  return request({
-    url: `/dict/data/${dictType}`,
+    url: '/dict/types',
     method: 'get'
   })
 }
@@ -41,18 +35,7 @@ export const getDictDataByType = (dictType: string) => {
  */
 export const createDictType = (data: DictType) => {
   return request({
-    url: '/dict/type',
-    method: 'post',
-    data
-  })
-}
-
-/**
- * 创建字典数据
- */
-export const createDictData = (data: DictData) => {
-  return request({
-    url: '/dict/data',
+    url: '/dict/types',
     method: 'post',
     data
   })
@@ -63,8 +46,39 @@ export const createDictData = (data: DictData) => {
  */
 export const updateDictType = (id: number, data: DictType) => {
   return request({
-    url: `/dict/type/${id}`,
+    url: `/dict/types/${id}`,
     method: 'put',
+    data
+  })
+}
+
+/**
+ * 删除字典类型
+ */
+export const deleteDictType = (id: number) => {
+  return request({
+    url: `/dict/types/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
+ * 根据字典类型获取字典数据列表
+ */
+export const getDictDataList = (dictType: string) => {
+  return request({
+    url: `/dict/data/${dictType}`,
+    method: 'get'
+  })
+}
+
+/**
+ * 创建字典数据
+ */
+export const createDictData = (data: DictData) => {
+  return request({
+    url: '/dict/data',
+    method: 'post',
     data
   })
 }
@@ -81,16 +95,6 @@ export const updateDictData = (id: number, data: DictData) => {
 }
 
 /**
- * 删除字典类型
- */
-export const deleteDictType = (id: number) => {
-  return request({
-    url: `/dict/type/${id}`,
-    method: 'delete'
-  })
-}
-
-/**
  * 删除字典数据
  */
 export const deleteDictData = (id: number) => {
@@ -99,3 +103,4 @@ export const deleteDictData = (id: number) => {
     method: 'delete'
   })
 }
+

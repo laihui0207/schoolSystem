@@ -33,10 +33,8 @@
             AND e.status = #{request.status}
         </if>
         <if test="request.gradeId != null">
-            AND (e.grade_ids LIKE CONCAT('%,', #{request.gradeId}, ',%')
-                 OR e.grade_ids LIKE CONCAT(#{request.gradeId}, ',%')
-                 OR e.grade_ids LIKE CONCAT('%,', #{request.gradeId})
-                 OR e.grade_ids = CAST(#{request.gradeId} AS VARCHAR))
+            AND ',' || translate(e.grade_ids, '[] ', '') || ','
+                LIKE CONCAT('%,', #{request.gradeId}, ',%')
         </if>
         <if test="request.startDate != null">
             AND e.exam_date &gt;= #{request.startDate}

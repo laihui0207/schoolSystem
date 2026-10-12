@@ -120,6 +120,36 @@ class JwtTokenUtilTest {
     }
 
     @Test
+    @DisplayName("应该区分刷新令牌与访问令牌")
+    void shouldDistinguishRefreshTokenFromAccessToken() {
+        // Given
+        String accessToken = jwtTokenUtil.generateToken(1L, "testuser");
+        String refreshToken = jwtTokenUtil.generateRefreshToken(1L, "testuser");
+
+        // When & Then: 只有带 type=refresh 声明的令牌才能用于刷新
+        assertFalse(jwtTokenUtil.isRefreshToken(accessToken));
+        assertTrue(jwtTokenUtil.isRefreshToken(refreshToken));
+    }
+
+    @Test
+    @DisplayName("无效令牌不应被识别为刷新令牌")
+    void shouldNotTreatInvalidTokenAsRefreshToken() {
+        assertFalse(jwtTokenUtil.isRefreshToken("invalid.token.here"));
+    }
+
+    @Test
+    @DisplayName("应该暴露配置的访问令牌有效期")
+    void shouldExposeConfiguredExpiration() {
+        assertEquals(3600000L, jwtTokenUtil.getExpirationMillis());
+    }
+
+    @Test
+    @DisplayName("应该暴露配置的刷新令牌有效期")
+    void shouldExposeConfiguredRefreshExpiration() {
+        assertEquals(86400000L, jwtTokenUtil.getRefreshExpirationMillis());
+    }
+
+    @Test
     @DisplayName("应该拒绝无效令牌")
     void shouldRejectInvalidToken() {
         // Given

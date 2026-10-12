@@ -1,4 +1,8 @@
 -- 成绩变更日志表
+-- ponytail: V3 里残留了一份旧版 score_change_log（operator_id/approve_status 列），全新建库时会先被 V3 建出来，
+-- 导致下面的 CREATE TABLE IF NOT EXISTS 被跳过、student_id 索引失败。此时该表必然为空（V4/V5 不写它），
+-- 所以直接丢弃后按实体类 ScoreChangeLog 的结构重建。已存在的库早已跑过 V6，不受影响。
+DROP TABLE IF EXISTS score_change_log;
 CREATE TABLE IF NOT EXISTS score_change_log (
     id BIGSERIAL PRIMARY KEY,
     score_id BIGINT NOT NULL,

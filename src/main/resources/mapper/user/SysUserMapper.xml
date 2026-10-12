@@ -21,4 +21,35 @@
           AND p.deleted = 0
     </select>
 
+    <!-- 按角色编码为用户绑定角色 -->
+    <insert id="insertUserRole">
+        INSERT INTO sys_user_role (user_id, role_id)
+        SELECT #{userId}, r.id
+        FROM sys_role r
+        WHERE r.role_code = #{roleCode}
+          AND r.deleted = 0
+    </insert>
+
+    <!-- 解绑用户的全部角色 -->
+    <delete id="deleteUserRolesByUserId">
+        DELETE FROM sys_user_role
+        WHERE user_id = #{userId}
+    </delete>
+
+    <!-- 根据用户ID查询关联的教师ID（teacher.user_id 有唯一约束，最多一行） -->
+    <select id="selectTeacherIdByUserId" resultType="java.lang.Long">
+        SELECT id
+        FROM teacher
+        WHERE user_id = #{userId}
+          AND deleted = 0
+    </select>
+
+    <!-- 根据用户ID查询关联的学生ID（student.user_id 有唯一约束，最多一行） -->
+    <select id="selectStudentIdByUserId" resultType="java.lang.Long">
+        SELECT id
+        FROM student
+        WHERE user_id = #{userId}
+          AND deleted = 0
+    </select>
+
 </mapper>

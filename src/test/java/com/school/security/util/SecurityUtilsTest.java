@@ -103,10 +103,40 @@ class SecurityUtilsTest {
     }
 
     @Test
+    @DisplayName("查询用学校ID：超管返回null放开全库，其他角色必须限定本校")
+    void shouldReturnNullSchoolForQueryOnlyForSuperAdmin() {
+        // Given: 超级管理员
+        authenticate(LoginUser.builder()
+                .userId(1L)
+                .username("admin")
+                .schoolId(null)
+                .userType(UserRole.SUPER_ADMIN.getUserType())
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")))
+                .build());
+
+        // Then: null 表示不拼 school_id 条件，跨校可见
+        assertNull(SecurityUtils.currentSchoolIdForQuery());
+
+        // Given: 普通教师
+        authenticate(teacher().build());
+
+        // Then: 必须回落到本校，绝不能是 null
+        assertEquals(2L, SecurityUtils.currentSchoolIdForQuery());
+    }
+
+    @Test
+    @DisplayName("未登录时查询用学校ID也必须抛异常，不能退化为不限校")
+    void shouldThrowForQuerySchoolWhenNotAuthenticated() {
+        // Given: 未设置任何认证信息
+        // Then: 若返回 null，匿名请求将读到全库
+        assertThrows(BusinessException.class, SecurityUtils::currentSchoolIdForQuery);
+    }
+
+    @Test
     @DisplayName("非教师账号取教师ID应该抛异常")
     void shouldThrowWhenNoTeacherProfile() {
         // Given
-        authenticate(teacher().userType(UserRole.SCHOOL_ADMIN.getUserType()).teacherId(null).build());
+        authenticate(teacher().userType(UserRole.ADMIN.getUserType()).teacherId(null).build());
 
         // Then
         assertFalse(SecurityUtils.isTeacher());

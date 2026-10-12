@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { UserInfo } from '@/stores/user'
 
 export interface LoginParams {
   username: string
@@ -10,7 +11,9 @@ export interface LoginParams {
 export interface LoginResponse {
   accessToken: string
   refreshToken: string
-  userInfo: any
+  tokenType: string
+  expiresIn: number
+  userInfo: UserInfo
 }
 
 export interface CaptchaResponse {
@@ -43,19 +46,22 @@ export const login = (data: LoginParams) => {
 /**
  * 登出
  */
-export const logout = () => {
+// ponytail: 契约 T — 登出把 refreshToken 一并带给后端，让其删除 Redis 里的 refresh 登记（参数可选，后端兼容不传）
+export const logout = (refreshToken?: string) => {
   return request({
     url: '/auth/logout',
-    method: 'post'
+    method: 'post',
+    params: refreshToken ? { refreshToken } : undefined
   })
 }
 
 /**
  * 刷新token
  */
-export const refreshToken = () => {
-  return request({
+export const refreshToken = (token: string) => {
+  return request<LoginResponse>({
     url: '/auth/refresh',
-    method: 'post'
+    method: 'post',
+    params: { refreshToken: token }
   })
 }

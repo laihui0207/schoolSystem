@@ -29,7 +29,7 @@ public final class TestAuth {
                 .userId(100L)
                 .username("admin_school" + schoolId)
                 .schoolId(schoolId)
-                .userType(UserRole.SCHOOL_ADMIN.code)
+                .userType(UserRole.ADMIN.getUserType())
                 .authorities(List.of(new SimpleGrantedAuthority("ROLE_SCHOOL_ADMIN")))
                 .build());
     }
@@ -42,7 +42,7 @@ public final class TestAuth {
                 .userId(1L)
                 .username("superadmin")
                 .schoolId(null)
-                .userType(UserRole.SUPER_ADMIN.code)
+                .userType(UserRole.SUPER_ADMIN.getUserType())
                 .authorities(List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")))
                 .build());
     }

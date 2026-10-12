@@ -1,5 +1,8 @@
 import { useUserStore } from '@/stores/user'
 
+// ponytail: 本文件用原生 fetch/EventSource（SSE 走不了 axios），所以无法复用 utils/request.ts 的拦截器与 baseURL；
+// BASE 的前缀必须与 utils/request.ts 中 axios 实例的 baseURL（'/api/v1'）保持一致，改其中一处时另一处必须同步。
+// request.ts 目前没有导出 baseURL 常量，这里只能手写；日后若导出，请改为 import 复用而不是再抄一份。
 const BASE = '/api/v1/chat'
 
 export interface MessageDto {

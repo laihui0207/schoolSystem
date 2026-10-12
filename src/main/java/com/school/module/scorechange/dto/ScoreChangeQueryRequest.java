@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.SuperBuilder;
 
+import java.util.Set;
+
 /**
  * 成绩变更查询请求
  *
@@ -34,6 +36,17 @@ public class ScoreChangeQueryRequest extends BasePageQuery {
      * 状态
      */
     private Integer status;
+
+    // ponytail: 下面两个是服务端范围字段，listChangeLogs 会先清空再按身份填入，客户端传入无效
+    /**
+     * 学校ID：校管理员查询时由 Service 填入本校ID
+     */
+    private Long schoolId;
+
+    /**
+     * 班级ID集合：教师查询时由 Service 填入任教 ∪ 班主任班级
+     */
+    private Set<Long> classIds;
 
     public ScoreChangeQueryRequest() {
         super();

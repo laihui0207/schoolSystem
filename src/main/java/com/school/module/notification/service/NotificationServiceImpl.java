@@ -2,11 +2,13 @@ package com.school.module.notification.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
+import com.school.common.result.ResultCode;
 import com.school.module.notification.dto.NotificationCreateRequest;
 import com.school.module.notification.dto.NotificationQueryRequest;
 import com.school.module.notification.dto.NotificationResponse;
 import com.school.module.notification.entity.Notification;
 import com.school.module.notification.mapper.NotificationMapper;
+import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,11 +68,14 @@ public class NotificationServiceImpl implements NotificationService {
         if (notification == null) {
             throw new BusinessException("通知不存在");
         }
+        assertOwner(notification);
         return convertToResponse(notification);
     }
 
     @Override
     public Page<NotificationResponse> listNotifications(NotificationQueryRequest request) {
+        // ponytail: notification 不在租户插件表清单内，收件人隔离只能在这里收口；忽略客户端传入的 userId
+        request.setUserId(SecurityUtils.currentUserId());
         Page<Notification> page = new Page<>(request.getPageNum(), request.getPageSize());
         Page<Notification> resultPage = notificationMapper.selectPageByQuery(page, request);
 
@@ -95,28 +100,21 @@ public class NotificationServiceImpl implements NotificationService {
         if (notification == null) {
             throw new BusinessException("通知不存在");
         }
-
-        Notification updated = new Notification();
-        updated.setId(notification.getId());
-        updated.setUserId(notification.getUserId());
-        updated.setTitle(notification.getTitle());
-        updated.setContent(notification.getContent());
-        updated.setType(notification.getType());
-        updated.setIsRead(1);
-        updated.setRelatedId(notification.getRelatedId());
-
-        notificationMapper.updateById(updated);
+        assertOwner(notification);
+        markRead(notification);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void batchMarkAsRead(List<Long> ids) {
+        // ponytail: 原先 try/catch 吞掉所有异常，越权会被静默忽略；现在不存在的跳过、越权则抛出
         for (Long id : ids) {
-            try {
-                markAsRead(id);
-            } catch (Exception e) {
-                // 继续处理下一个
+            Notification notification = notificationMapper.selectById(id);
+            if (notification == null) {
+                continue;
             }
+            assertOwner(notification);
+            markRead(notification);
         }
     }
 
@@ -152,6 +150,7 @@ public class NotificationServiceImpl implements NotificationService {
         if (notification == null) {
             throw new BusinessException("通知不存在");
         }
+        assertOwner(notification);
         notificationMapper.deleteById(id);
     }
 
@@ -167,6 +166,35 @@ public class NotificationServiceImpl implements NotificationService {
         String content = "您有新的考试成绩已发布，请登录查看。";
 
         batchCreateNotifications(studentIds, title, content, 1, examId);
+    }
+
+    /**
+     * 校验通知归属：只有收件人本人或超级管理员可以读取/操作
+     */
+    private void assertOwner(Notification notification) {
+        // ponytail: 通知 id 自增可枚举，不比对 user_id 任何登录用户都能读/删别人的通知
+        if (SecurityUtils.isSuperAdmin()) {
+            return;
+        }
+        if (!SecurityUtils.currentUserId().equals(notification.getUserId())) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "无权操作他人的通知");
+        }
+    }
+
+    /**
+     * 标记单条通知为已读
+     */
+    private void markRead(Notification notification) {
+        Notification updated = new Notification();
+        updated.setId(notification.getId());
+        updated.setUserId(notification.getUserId());
+        updated.setTitle(notification.getTitle());
+        updated.setContent(notification.getContent());
+        updated.setType(notification.getType());
+        updated.setIsRead(1);
+        updated.setRelatedId(notification.getRelatedId());
+
+        notificationMapper.updateById(updated);
     }
 
     /**

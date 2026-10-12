@@ -15,7 +15,15 @@ import org.apache.ibatis.annotations.Param;
 @Mapper
 public interface SchoolMapper extends BaseMapper<School> {
 
+    /**
+     * 根据学校编码查询
+     */
+    School selectBySchoolCode(@Param("schoolCode") String schoolCode);
+
+    /**
+     * 分页查询学校列表
+     */
     Page<School> selectPageByQuery(@Param("page") Page<School> page,
-                                   @Param("request") SchoolQueryRequest request);
+                                    @Param("query") SchoolQueryRequest query);
 
 }

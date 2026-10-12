@@ -194,7 +194,7 @@ import {
 } from '@/api/config'
 import {
   getDictTypeList,
-  getDictDataByType,
+  getDictDataList,
   createDictType,
   createDictData,
   updateDictData,
@@ -342,7 +342,7 @@ const loadDictTypes = async () => {
 const loadDictData = async (type: string) => {
   dictDataLoading.value = true
   try {
-    dictDataList.value = (await getDictDataByType(type)) || []
+    dictDataList.value = (await getDictDataList(type)) || []
   } catch {
     ElMessage.error('加载字典数据失败')
   } finally {

@@ -53,31 +53,46 @@ public class LoginUser implements UserDetails, Serializable {
      */
     private final Long studentId;
 
+    /**
+     * 是否班主任：教师账号登录时查 class.head_teacher_id 确定
+     */
+    private final boolean headTeacher;
+
     private final Collection<? extends GrantedAuthority> authorities;
 
     /**
      * 是否超级管理员：可跨学校访问，租户约束对其不生效
      */
     public boolean isSuperAdmin() {
-        return UserRole.SUPER_ADMIN.code == userType;
+        return UserRole.SUPER_ADMIN.getUserType().equals(userType);
     }
 
     /**
-     * 是否教师：查询需进一步收窄到其任教班级
+     * 是否校管理员
+     */
+    public boolean isSchoolAdmin() {
+        return UserRole.ADMIN.getUserType().equals(userType);
+    }
+
+    /**
+     * 是否教师（任课老师或班主任）：查询需进一步收窄到其任教班级
      */
     public boolean isTeacher() {
-        return UserRole.TEACHER.code == userType;
+        return UserRole.TEACHER.getUserType().equals(userType);
     }
 
     /**
-     * 是否学生
+     * 是否班主任：班主任可审核成绩、管理班级学生名单
      */
-    public boolean isStudent() {
-        return UserRole.STUDENT.code == userType;
+    public boolean isHeadTeacher() {
+        return isTeacher() && headTeacher;
     }
 
-    public boolean isHeadTeacher() {
-        return isTeacher();
+    /**
+     * 是否学生：只能查询自身成绩
+     */
+    public boolean isStudent() {
+        return UserRole.STUDENT.getUserType().equals(userType);
     }
 
     @Override

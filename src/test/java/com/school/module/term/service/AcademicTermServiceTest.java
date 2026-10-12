@@ -29,7 +29,7 @@ class AcademicTermServiceTest extends AbstractPostgresIT {
         req.setSchoolId(1L);
         req.setYear("2025-2026");
         req.setTerm(1);
-        AcademicTermResponse created = termService.create(req);
+        AcademicTermResponse created = termService.createTerm(req);
         assertThat(created.getId()).isNotNull();
         assertThat(created.getYear()).isEqualTo("2025-2026");
 

@@ -93,7 +93,8 @@ export const updateClass = (id: number, data: Class) => {
     data: {
       className: data.className,
       classCode: data.classCode,
-      headTeacherId: data.headTeacherId
+      // ponytail: G-9 — 清空班主任时 el-select 给的是 undefined，JSON 序列化会直接丢字段，后端无法区分「没改」和「置空」；显式发 null
+      headTeacherId: data.headTeacherId ?? null
     }
   })
 }

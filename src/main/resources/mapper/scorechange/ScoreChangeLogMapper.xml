@@ -21,7 +21,7 @@
             reject_reason,
             created_at,
             updated_at
-        FROM score_change_log
+        FROM score_change_log l
         WHERE deleted = 0
         <if test="request.examId != null">
             AND exam_id = #{request.examId}
@@ -34,6 +34,22 @@
         </if>
         <if test="request.status != null">
             AND status = #{request.status}
+        </if>
+        <!-- ponytail: score_change_log 没有 school_id/class_id 列，也不在租户白名单，
+             校管理员经 exam.school_id、教师经 score.class_id 关联收窄；
+             classIds 为空集合时故意让 IN () 报错而不是放开全表（Service 已在空集时短路返回） -->
+        <if test="request.schoolId != null">
+            AND EXISTS (SELECT 1 FROM exam e WHERE e.id = l.exam_id AND e.school_id = #{request.schoolId})
+        </if>
+        <if test="request.classIds != null">
+            AND EXISTS (
+                SELECT 1 FROM score s
+                WHERE s.id = l.score_id
+                AND s.class_id IN
+                <foreach collection="request.classIds" item="classId" open="(" separator="," close=")">
+                    #{classId}
+                </foreach>
+            )
         </if>
         <if test="request.orderBy != null and request.orderBy != ''">
             ORDER BY ${request.orderBy}

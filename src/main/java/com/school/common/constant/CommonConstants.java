@@ -67,4 +67,15 @@ public interface CommonConstants {
      */
     String USER_INFO_KEY = "user:info:";
 
+    /**
+     * 刷新令牌 Redis Key 前缀：refresh:&lt;jwt&gt; -> userId
+     */
+    // ponytail: refresh token 必须在服务端登记，登出/改密/禁用才能让它失效（契约 T）
+    String REFRESH_TOKEN_KEY = "refresh:";
+
+    /**
+     * 用户当前活跃刷新令牌 Redis Key 前缀：user:refresh:&lt;userId&gt; -> 当前 refresh jwt（单活跃）
+     */
+    String USER_REFRESH_KEY = "user:refresh:";
+
 }

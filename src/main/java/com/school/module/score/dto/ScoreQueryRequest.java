@@ -55,6 +55,13 @@ public class ScoreQueryRequest extends BasePageQuery {
      */
     private String studentNo;
 
+    /**
+     * 只查已发布考试（exam.status=3）的成绩
+     * <p>
+     * ponytail: 不接受客户端传入——listScores/getStudentExamScores 对学生身份强制置 true，其余身份置 null
+     */
+    private Boolean publishedOnly;
+
     public ScoreQueryRequest() {
         super();
     }

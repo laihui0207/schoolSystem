@@ -2,6 +2,7 @@ package com.school.module.export.controller;
 
 import com.school.common.result.Result;
 import com.school.module.export.service.ExportService;
+import com.school.module.score.dto.BatchInputResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,7 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * @author School System
  */
 @RestController
-@RequestMapping("/api/export")
+@RequestMapping("/export")
 @RequiredArgsConstructor
 public class ExportController {
 
@@ -40,16 +41,17 @@ public class ExportController {
     }
 
     /**
-     * 导入成绩Excel
+     * 导入成绩Excel（按 考试/班级/科目 三元组）
      */
     @PostMapping("/import-scores")
-    public Result<Integer> importScores(
+    public Result<BatchInputResult> importScores(
             @RequestParam Long examId,
             @RequestParam Long classId,
-            @RequestParam Long schoolId,
+            @RequestParam Long subjectId,
             @RequestParam("file") MultipartFile file) {
-        Integer count = exportService.importScores(examId, classId, schoolId, file);
-        return Result.success(count);
+        // ponytail: 与 /scores/batch-input 同构，返回逐条失败明细（契约 1）
+        BatchInputResult result = exportService.importScores(examId, classId, subjectId, file);
+        return Result.success(result);
     }
 
 }

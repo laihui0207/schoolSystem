@@ -5,6 +5,7 @@ import com.school.common.exception.BusinessException;
 import com.school.module.grade.dto.GradeCreateRequest;
 import com.school.module.grade.dto.GradeQueryRequest;
 import com.school.module.grade.dto.GradeResponse;
+import com.school.module.grade.dto.GradeUpdateRequest;
 import com.school.module.grade.entity.Grade;
 import com.school.module.grade.mapper.GradeMapper;
 import com.school.module.school.entity.School;
@@ -69,16 +70,18 @@ public class GradeServiceImpl implements GradeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public GradeResponse create(GradeCreateRequest req) {
-        School school = schoolMapper.selectById(req.getSchoolId());
+        // ponytail: G-3 — 归属学校取自当前身份，否则校管理员可往别校写年级，且同校唯一校验被租户改写后形同虚设
+        Long schoolId = SecurityUtils.resolveSchoolId(req.getSchoolId());
+        School school = schoolMapper.selectById(schoolId);
         if (school == null) {
             throw new BusinessException("学校不存在");
         }
-        Grade existing = gradeMapper.selectBySchoolIdAndCode(req.getSchoolId(), req.getGradeCode());
+        Grade existing = gradeMapper.selectBySchoolIdAndCode(schoolId, req.getGradeCode());
         if (existing != null) {
             throw new BusinessException("该年级编码在本校已存在");
         }
         Grade grade = new Grade();
-        grade.setSchoolId(req.getSchoolId());
+        grade.setSchoolId(schoolId);
         grade.setGradeName(req.getGradeName());
         grade.setGradeCode(req.getGradeCode());
         gradeMapper.insert(grade);
@@ -87,10 +90,17 @@ public class GradeServiceImpl implements GradeService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public GradeResponse update(Long id, GradeCreateRequest req) {
+    public GradeResponse update(Long id, GradeUpdateRequest req) {
         Grade existing = gradeMapper.selectById(id);
         if (existing == null) {
             throw new BusinessException("年级不存在");
+        }
+        // ponytail: UpdateRequest 不带 schoolId，归属学校不可改；编码变更时沿用 create 的同校唯一校验
+        if (req.getGradeCode() != null && !req.getGradeCode().equals(existing.getGradeCode())) {
+            Grade sameCode = gradeMapper.selectBySchoolIdAndCode(existing.getSchoolId(), req.getGradeCode());
+            if (sameCode != null && !sameCode.getId().equals(id)) {
+                throw new BusinessException("该年级编码在本校已存在");
+            }
         }
         Grade updated = new Grade();
         updated.setId(existing.getId());
@@ -107,6 +117,11 @@ public class GradeServiceImpl implements GradeService {
         Grade existing = gradeMapper.selectById(id);
         if (existing == null) {
             throw new BusinessException("年级不存在");
+        }
+        // ponytail: 没有外键约束，被班级引用的年级删掉后班级的 gradeName 会静默变空，这里显式拒绝
+        Integer classCount = gradeMapper.countClassesByGradeId(id);
+        if (classCount != null && classCount > 0) {
+            throw new BusinessException("该年级下仍有 " + classCount + " 个班级，请先删除或迁移班级");
         }
         gradeMapper.deleteById(id);
     }

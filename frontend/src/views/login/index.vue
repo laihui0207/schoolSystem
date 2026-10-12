@@ -46,6 +46,7 @@
             <img
               v-if="captchaImage"
               :src="captchaImage"
+              alt="验证码"
               class="captcha-img"
               title="点击刷新"
               @click="loadCaptcha"
@@ -125,8 +126,10 @@ const handleLogin = async () => {
         await userStore.login(loginForm.username, loginForm.password, loginForm.captcha, captchaKey.value)
         ElMessage.success('登录成功')
         router.push('/')
-      } catch (error: any) {
-        ElMessage.error(error.message || '登录失败')
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '登录失败'
+        ElMessage.error(message)
+        // 登录失败后刷新验证码
         loadCaptcha()
         loginForm.captcha = ''
       } finally {

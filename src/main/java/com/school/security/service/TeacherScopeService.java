@@ -25,6 +25,33 @@ public class TeacherScopeService {
     private final TeacherClassMapper teacherClassMapper;
 
     /**
+     * 指定教师任教的班级ID集合（跨所有科目）
+     * AI 工具层调用，teacherId 由 ToolContext 传入，不走 SecurityContextHolder
+     */
+    public Set<Long> teachingClassIdsFor(Long teacherId) {
+        return teacherClassMapper.selectByTeacherId(teacherId).stream()
+                .map(TeacherClass::getClassId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * 指定教师担任班主任的班级ID集合
+     */
+    public Set<Long> headClassIdsFor(Long teacherId) {
+        return teacherClassMapper.selectHeadClassIdsByTeacherId(teacherId)
+                .stream().collect(Collectors.toSet());
+    }
+
+    /**
+     * 指定教师有权访问的全部班级ID（任课 ∪ 班主任）
+     */
+    public Set<Long> allowedClassIdsFor(Long teacherId) {
+        Set<Long> result = teachingClassIdsFor(teacherId);
+        result.addAll(headClassIdsFor(teacherId));
+        return result;
+    }
+
+    /**
      * 当前教师任教的(classId, subjectId)组合
      */
     public List<TeacherClass> currentTeachingAssignments() {

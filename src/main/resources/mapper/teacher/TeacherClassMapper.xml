@@ -2,19 +2,62 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.school.module.teacher.mapper.TeacherClassMapper">
 
-    <!-- 查询教师任教的所有(classId, subjectId)组合 -->
     <select id="selectByTeacherId" resultType="com.school.module.teacher.entity.TeacherClass">
         SELECT id, teacher_id, class_id, subject_id, created_at
         FROM teacher_class
         WHERE teacher_id = #{teacherId}
     </select>
 
-    <!-- 查询教师担任班主任的班级ID列表 -->
     <select id="selectHeadClassIdsByTeacherId" resultType="java.lang.Long">
         SELECT c.id
         FROM class c
         WHERE c.head_teacher_id = #{teacherId}
           AND c.deleted = 0
+    </select>
+
+    <select id="countByTeacherClassSubject" resultType="int">
+        SELECT COUNT(1) FROM teacher_class
+        WHERE teacher_id = #{teacherId} AND class_id = #{classId} AND subject_id = #{subjectId}
+    </select>
+
+    <delete id="deleteByTeacherClassSubject">
+        DELETE FROM teacher_class
+        WHERE teacher_id = #{teacherId} AND class_id = #{classId} AND subject_id = #{subjectId}
+    </delete>
+
+    <select id="selectDetailByTeacherId"
+            resultType="com.school.module.teacher.mapper.TeacherClassMapper$TeacherClassDetail">
+        SELECT
+            tc.class_id     AS classId,
+            c.class_name    AS className,
+            tc.subject_id   AS subjectId,
+            s.subject_name  AS subjectName,
+            (c.head_teacher_id = tc.teacher_id) AS isHeadTeacher
+        FROM teacher_class tc
+        JOIN class c ON c.id = tc.class_id AND c.deleted = 0
+        JOIN subject s ON s.id = tc.subject_id AND s.deleted = 0
+        WHERE tc.teacher_id = #{teacherId}
+        ORDER BY c.class_name, s.subject_name
+    </select>
+
+    <!-- 批量查询多个教师的任教班级明细（列表页回填用，一次 IN 查完） -->
+    <select id="selectDetailByTeacherIds"
+            resultType="com.school.module.teacher.mapper.TeacherClassMapper$TeacherClassDetail">
+        SELECT
+            tc.teacher_id   AS teacherId,
+            tc.class_id     AS classId,
+            c.class_name    AS className,
+            tc.subject_id   AS subjectId,
+            s.subject_name  AS subjectName,
+            (c.head_teacher_id = tc.teacher_id) AS isHeadTeacher
+        FROM teacher_class tc
+        JOIN class c ON c.id = tc.class_id AND c.deleted = 0
+        JOIN subject s ON s.id = tc.subject_id AND s.deleted = 0
+        WHERE tc.teacher_id IN
+        <foreach collection="teacherIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY tc.teacher_id, c.class_name, s.subject_name
     </select>
 
 </mapper>

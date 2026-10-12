@@ -3,6 +3,7 @@ package com.school.module.pdf.service;
 import com.school.common.exception.BusinessException;
 import com.school.module.score.entity.Score;
 import com.school.module.score.mapper.ScoreMapper;
+import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +27,7 @@ public class PdfServiceImpl implements PdfService {
     @Override
     public void generateScoreReport(Long examId, Long studentId, HttpServletResponse response) {
         // 查询学生成绩
-        List<Score> scores = scoreMapper.selectByExamId(examId, null).stream()
+        List<Score> scores = scoreMapper.selectByExamId(SecurityUtils.currentSchoolIdForQuery(), examId, null).stream()
                 .filter(s -> s.getStudentId().equals(studentId))
                 .toList();
 

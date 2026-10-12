@@ -8,6 +8,7 @@ import com.school.module.stat.dto.GradeStatResponse;
 import com.school.module.stat.dto.StudentTrendResponse;
 import com.school.module.stat.service.StatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -26,8 +27,9 @@ public class AnalysisTools {
             """)
     public GradeStatResponse compareClassesInExam(
             @ToolParam(description = "考试ID") Long examId,
-            @ToolParam(description = "年级ID，可选，不传则查全校") Long gradeId) {
-        permissionChecker.assertIsAdmin();
+            @ToolParam(description = "年级ID，可选，不传则查全校") Long gradeId,
+            ToolContext toolContext) {
+        permissionChecker.assertIsAdmin(toolContext);
         return statService.getGradeStat(examId, gradeId);
     }
 
@@ -39,14 +41,15 @@ public class AnalysisTools {
     public StudentTrendResponse analyzeStudentProgress(
             @ToolParam(description = "学生ID，学生角色不传则默认当前用户") Long studentId,
             @ToolParam(description = "科目ID，可选，不传则分析全科") Long subjectId,
-            @ToolParam(description = "学期ID，可选，不传则查全部学期") Long termId) {
+            @ToolParam(description = "学期ID，可选，不传则查全部学期") Long termId,
+            ToolContext toolContext) {
         Long targetId = studentId;
         if (targetId == null) {
-            LoginUser user = permissionChecker.currentUser();
+            LoginUser user = permissionChecker.currentUser(toolContext);
             if (user.isStudent()) targetId = user.getStudentId();
             else throw new BusinessException(ResultCode.PARAM_ERROR, "请指定学生ID");
         }
-        permissionChecker.assertCanViewStudent(targetId);
+        permissionChecker.assertCanViewStudent(toolContext, targetId);
         return statService.getStudentTrend(targetId, subjectId, termId);
     }
 
@@ -56,8 +59,10 @@ public class AnalysisTools {
             """)
     public ClassStatResponse analyzeClassPerformance(
             @ToolParam(description = "考试ID") Long examId,
-            @ToolParam(description = "班级ID") Long classId) {
-        permissionChecker.assertCanViewClass(classId);
+            @ToolParam(description = "班级ID") Long classId,
+            ToolContext toolContext) {
+        permissionChecker.assertCanViewClass(toolContext, classId);
         return statService.getClassStat(examId, classId);
     }
+
 }

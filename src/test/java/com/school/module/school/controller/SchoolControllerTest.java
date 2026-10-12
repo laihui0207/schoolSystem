@@ -27,7 +27,7 @@ class SchoolControllerTest extends AbstractPostgresIT {
 
     @Test
     void listSchools_returnsOk() throws Exception {
-        mockMvc.perform(get("/api/v1/schools").contentType(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/schools").contentType(MediaType.APPLICATION_JSON))
                .andExpect(status().isOk())
                .andExpect(jsonPath("$.code").value(200));
     }
@@ -37,7 +37,7 @@ class SchoolControllerTest extends AbstractPostgresIT {
         String body = """
             {"schoolName":"测试学校","schoolCode":"TEST001","address":"测试地址","phone":"12345678901"}
             """;
-        var result = mockMvc.perform(post("/api/v1/schools")
+        var result = mockMvc.perform(post("/schools")
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                .andExpect(status().isOk())
                .andExpect(jsonPath("$.data.schoolName").value("测试学校"))
@@ -46,7 +46,7 @@ class SchoolControllerTest extends AbstractPostgresIT {
         // extract id and delete
         String resp = result.getResponse().getContentAsString();
         Long id = com.jayway.jsonpath.JsonPath.read(resp, "$.data.id");
-        mockMvc.perform(delete("/api/v1/schools/" + id))
+        mockMvc.perform(delete("/schools/" + id))
                .andExpect(status().isOk());
     }
 }

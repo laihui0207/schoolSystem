@@ -111,7 +111,8 @@ import type { PageResponse } from '@/types/common'
 
 const userStore = useUserStore()
 const userInfo = computed(() => userStore.userInfo)
-const isAdmin = computed(() => ['super_admin', 'admin'].includes(userInfo.value?.role || ''))
+// ponytail: 契约 2 — 管理员判定统一用 userType（1 超管 / 2 校管），与路由守卫、MainLayout 口径一致
+const isAdmin = computed(() => [1, 2].includes(userInfo.value?.userType ?? 0))
 
 const loading = ref(false)
 const tableData = ref<ScoreChangeLog[]>([])
@@ -169,10 +170,12 @@ const submitApprove = async () => {
     return
   }
   try {
-    await approveScoreChange(
-      { id: currentRow.value!.id, approved: approveForm.approved, rejectReason: approveForm.rejectReason },
-      userInfo.value!.id
-    )
+    // ponytail: 契约 P — 后端收 { changeLogIds, result 1|2, rejectReason }，审批人取 SecurityContext，不再传 approverId
+    await approveScoreChange({
+      changeLogIds: [currentRow.value!.id],
+      result: approveForm.approved ? 1 : 2,
+      rejectReason: approveForm.approved ? undefined : approveForm.rejectReason.trim()
+    })
     ElMessage.success(approveForm.approved ? '已通过' : '已驳回')
     approveDialogVisible.value = false
     loadList()

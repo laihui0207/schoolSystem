@@ -23,3 +23,10 @@ a {
 .el-main {
   padding: 20px;
 }
+
+// ponytail: el-select 的 width:100% 在 inline 表单里会塌成 0
+// （.el-form-item 是 inline-flex 收缩宽度，select 内部又是 flex + 省略号，min-content≈0），
+// 导致选中值看不见。给个默认下限，需要更宽的单独用 style 覆盖即可。
+.el-form--inline .el-form-item .el-select {
+  width: 180px;
+}

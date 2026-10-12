@@ -2,23 +2,47 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.school.module.term.mapper.AcademicTermMapper">
 
+    <!-- 结果映射 -->
     <resultMap id="BaseResultMap" type="com.school.module.term.entity.AcademicTerm">
         <id column="id" property="id" jdbcType="BIGINT"/>
         <result column="school_id" property="schoolId" jdbcType="BIGINT"/>
         <result column="year" property="year" jdbcType="VARCHAR"/>
-        <result column="term" property="term" jdbcType="SMALLINT"/>
+        <result column="term" property="term" jdbcType="INTEGER"/>
         <result column="start_date" property="startDate" jdbcType="DATE"/>
         <result column="end_date" property="endDate" jdbcType="DATE"/>
-        <result column="status" property="status" jdbcType="SMALLINT"/>
+        <result column="status" property="status" jdbcType="INTEGER"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
         <result column="updated_at" property="updatedAt" jdbcType="TIMESTAMP"/>
-        <result column="deleted" property="deleted" jdbcType="SMALLINT"/>
+        <result column="deleted" property="deleted" jdbcType="INTEGER"/>
     </resultMap>
 
+    <!-- 基础列 -->
     <sql id="Base_Column_List">
         id, school_id, year, term, start_date, end_date, status, created_at, updated_at, deleted
     </sql>
 
+    <!-- 根据学校ID、学年、学期查询 -->
+    <select id="selectBySchoolYearTerm" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM academic_term
+        WHERE school_id = #{schoolId}
+        AND year = #{year}
+        AND term = #{term}
+        AND deleted = 0
+    </select>
+
+    <!-- 查询学校的进行中的学期 -->
+    <select id="selectActiveTermBySchool" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM academic_term
+        WHERE school_id = #{schoolId}
+        AND status = 1
+        AND deleted = 0
+    </select>
+
+    <!-- 分页查询学年学期列表 -->
     <select id="selectPageByQuery" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List"/>
@@ -36,7 +60,29 @@
         <if test="query.status != null">
             AND status = #{query.status}
         </if>
-        ORDER BY year DESC, term ASC
+        ORDER BY year DESC, term DESC, created_at DESC
+    </select>
+
+    <!-- 根据学校ID查询所有学期 -->
+    <select id="selectBySchoolId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM academic_term
+        WHERE school_id = #{schoolId}
+        AND deleted = 0
+        ORDER BY year DESC, term DESC
+    </select>
+
+    <!-- 获取当前学期（status=1且当前日期在学期范围内） -->
+    <select id="selectCurrentTerm" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM academic_term
+        WHERE school_id = #{schoolId}
+        AND status = 1
+        AND CURRENT_DATE BETWEEN start_date AND end_date
+        AND deleted = 0
+        LIMIT 1
     </select>
 
 </mapper>

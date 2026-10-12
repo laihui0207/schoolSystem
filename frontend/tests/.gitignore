@@ -1,0 +1,14 @@
+# 测试生成的文件
+node_modules/
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

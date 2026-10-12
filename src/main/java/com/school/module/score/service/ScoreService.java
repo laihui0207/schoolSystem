@@ -24,9 +24,9 @@ public interface ScoreService {
      * 批量成绩录入
      *
      * @param request 批量录入请求
-     * @return 成功录入的数量
+     * @return 成功/失败条数与逐条失败原因
      */
-    Integer batchInputScores(ScoreBatchInputRequest request);
+    BatchInputResult batchInputScores(ScoreBatchInputRequest request);
 
     /**
      * 查询成绩详情
@@ -62,11 +62,22 @@ public interface ScoreService {
 
     /**
      * 计算排名
+     * <p>
+     * 契约 R：subjectId 非空只写该科的 rank_in_*；为空只写 total_rank_*。每行只写一次，不拷贝旧字段。
      *
      * @param examId 考试ID
      * @param subjectId 科目ID（可选，为空则计算总分排名）
      */
     void calculateRankings(Long examId, Long subjectId);
+
+    /**
+     * 计算全场排名：一次加载全场成绩，内存算出每行的单科三档 + 总分三档，每行只写一次
+     * <p>
+     * ponytail: 契约 R——publishExam 与成绩变更审批通过后应改调此方法，替代「总分 + 逐科」多次调用
+     *
+     * @param examId 考试ID
+     */
+    void calculateAllRankings(Long examId);
 
     /**
      * 删除成绩
@@ -79,7 +90,7 @@ public interface ScoreService {
 
     ScoreStatisticsDto getScoreStatistics(Long examId, Long classId, Long subjectId);
 
-    List<ReviewListItemDto> getReviewList(Long examId, Long classId, Long subjectId, Long schoolId);
+    Page<ReviewListItemDto> getReviewList(Long examId, Long classId, Long subjectId, String status, Long pageNum, Long pageSize);
 
     ReviewDetailDto getReviewDetail(Long examId, Long classId, Long subjectId);
 

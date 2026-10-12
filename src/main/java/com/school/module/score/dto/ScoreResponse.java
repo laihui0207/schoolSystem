@@ -105,6 +105,22 @@ public class ScoreResponse {
      */
     private Integer rankInSchool;
 
+    // ponytail: 契约 R——暴露总分三档名次供 C/F 组消费
+    /**
+     * 总分班级排名
+     */
+    private Integer totalRankInClass;
+
+    /**
+     * 总分年级排名
+     */
+    private Integer totalRankInGrade;
+
+    /**
+     * 总分校级排名
+     */
+    private Integer totalRankInSchool;
+
     /**
      * 录入人ID
      */
@@ -129,6 +145,11 @@ public class ScoreResponse {
      * 审核时间
      */
     private LocalDateTime reviewedAt;
+
+    /**
+     * 备注
+     */
+    private String remark;
 
     /**
      * 创建时间

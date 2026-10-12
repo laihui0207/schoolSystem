@@ -183,6 +183,9 @@
 | rank_in_class | INT | 班级排名（预计算） |
 | rank_in_grade | INT | 年级排名（预计算） |
 | rank_in_school | INT | 校级排名（预计算） |
+| total_rank_in_class | INT | 总分班级排名（同一学生同场考试所有行相同） |
+| total_rank_in_grade | INT | 总分年级排名（同一学生同场考试所有行相同） |
+| total_rank_in_school | INT | 总分校级排名（同一学生同场考试所有行相同） |
 | recorder_id | BIGINT | → sys_user.id（录入人） |
 | status | SMALLINT DEFAULT 0 | 0=待审核,1=已通过,2=已驳回 |
 | recorded_at | TIMESTAMP | |
