@@ -30,4 +30,13 @@ public class TeacherUpdateRequest {
      */
     private Integer status;
 
+    /**
+     * 绑定的登录账号 ID（sys_user.id）
+     * <p>
+     * ponytail: 教师档案与登录账号此前只能在创建时绑定，已存在的档案无法补绑，
+     * 导致教师账号登录后 LoginUser.teacherId 为空、任教范围判定全部落空。
+     * 传 null 表示不改动；要解绑请传 0。
+     */
+    private Long userId;
+
 }

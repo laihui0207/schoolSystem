@@ -114,6 +114,17 @@ public class Score extends BaseEntity {
      */
     private LocalDateTime reviewedAt;
 
+    // ponytail: 契约 K2（V16）——审核人与驳回原因独立成列，不再借用 remark 的「【驳回】」前缀
+    /**
+     * 审核人ID（sys_user.id），通过/驳回时写入
+     */
+    private Long reviewerId;
+
+    /**
+     * 驳回原因（status=2 时写入，重新通过时清空）
+     */
+    private String rejectReason;
+
     /**
      * 备注
      */

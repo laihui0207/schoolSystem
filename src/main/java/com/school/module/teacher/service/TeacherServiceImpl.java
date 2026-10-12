@@ -17,6 +17,9 @@ import com.school.module.teacher.entity.Teacher;
 import com.school.module.teacher.entity.TeacherClass;
 import com.school.module.teacher.mapper.TeacherClassMapper;
 import com.school.module.teacher.mapper.TeacherMapper;
+import com.school.module.user.entity.SysUser;
+import com.school.module.user.enums.UserRole;
+import com.school.module.user.mapper.SysUserMapper;
 import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +42,39 @@ public class TeacherServiceImpl implements TeacherService {
     private final SchoolMapper schoolMapper;
     private final SubjectMapper subjectMapper;
     private final ClassMapper classMapper;
+    private final SysUserMapper sysUserMapper;
+
+    /**
+     * 解析更新后的登录账号绑定：null 保持不变，0 解绑，其他值必须是本校教师类型且未绑定别的档案的账号。
+     */
+    private Long resolveBoundUserId(Teacher existing, Long requested) {
+        if (requested == null) {
+            return existing.getUserId();
+        }
+        if (requested == 0L) {
+            return null;
+        }
+        if (requested.equals(existing.getUserId())) {
+            return requested;
+        }
+        SysUser user = sysUserMapper.selectById(requested);
+        if (user == null) {
+            throw new BusinessException("登录账号不存在");
+        }
+        if (!UserRole.TEACHER.getUserType().equals(user.getUserType())) {
+            throw new BusinessException("只能绑定教师类型的登录账号");
+        }
+        if (user.getSchoolId() != null && !user.getSchoolId().equals(existing.getSchoolId())) {
+            throw new BusinessException("登录账号与教师档案不属于同一学校");
+        }
+        Long occupied = teacherMapper.selectCount(new LambdaQueryWrapper<Teacher>()
+                .eq(Teacher::getUserId, requested)
+                .ne(Teacher::getId, existing.getId()));
+        if (occupied > 0) {
+            throw new BusinessException("该登录账号已绑定其他教师档案");
+        }
+        return requested;
+    }
 
     private static final List<Integer> VALID_STATUS = Arrays.asList(0, 1);
     private static final List<Integer> VALID_GENDER = Arrays.asList(1, 2);
@@ -87,7 +123,7 @@ public class TeacherServiceImpl implements TeacherService {
         updated.setId(existing.getId());
         updated.setTeacherNo(existing.getTeacherNo());
         updated.setSchoolId(existing.getSchoolId());
-        updated.setUserId(existing.getUserId());
+        updated.setUserId(resolveBoundUserId(existing, request.getUserId()));
         updated.setName(request.getName() != null ? request.getName() : existing.getName());
         updated.setGender(request.getGender() != null ? request.getGender() : existing.getGender());
         updated.setSubjectId(request.getSubjectId() != null ? request.getSubjectId() : existing.getSubjectId());

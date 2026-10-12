@@ -73,6 +73,15 @@
           <el-menu-item v-if="isAdmin || isTeacher" index="/warning">成绩预警</el-menu-item>
         </el-sub-menu>
 
+        <!-- 功能模块扩展菜单：来自 layouts/menu/groups/*.ts，见 layouts/menu/index.ts -->
+        <el-sub-menu v-for="group in featureGroups" :key="group.key" :index="group.key">
+          <template #title>
+            <el-icon><component :is="group.icon" /></el-icon>
+            <span>{{ group.title }}</span>
+          </template>
+          <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">{{ item.title }}</el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu v-if="isAdmin" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -82,6 +91,7 @@
           <el-menu-item index="/system/user">用户管理</el-menu-item>
           <el-menu-item index="/system/dict">数据字典</el-menu-item>
           <el-menu-item index="/system/config">系统配置</el-menu-item>
+          <el-menu-item v-for="item in systemExtraItems" :key="item.path" :index="item.path">{{ item.title }}</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -136,6 +146,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { getUnreadCount } from '@/api/notification'
+import { visibleMenuGroups } from '@/layouts/menu'
 import {
   HomeFilled,
   School,
@@ -162,6 +173,12 @@ const userType = computed(() => userStore.userInfo?.userType ?? 0)
 const isAdmin = computed(() => userType.value === 1 || userType.value === 2)
 const isTeacher = computed(() => userType.value === 3)
 // student: only dashboard, score/query, stat/student-trend, notification — controlled via v-if above
+
+// ponytail: 新功能的菜单从 layouts/menu/groups/*.ts 自动收集；key 为 'system' 的分组不单独成组，
+// 其条目并入内置「系统管理」子菜单（便于审计日志、定时任务、备份等挂在同一入口下）。
+const allFeatureGroups = computed(() => visibleMenuGroups(userType.value))
+const featureGroups = computed(() => allFeatureGroups.value.filter(g => g.key !== 'system'))
+const systemExtraItems = computed(() => allFeatureGroups.value.filter(g => g.key === 'system').flatMap(g => g.items))
 
 // ponytail: 铃铛角标以前从未赋值恒为 0；进入布局时拉一次未读数，点击跳通知页
 const loadUnreadCount = async () => {

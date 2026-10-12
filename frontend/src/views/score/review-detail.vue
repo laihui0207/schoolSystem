@@ -172,9 +172,10 @@
                   <div class="history-action">
                     {{ item.action === 'approve' ? '审核通过' : '审核驳回' }}
                   </div>
-                  <div class="history-operator">操作人: {{ item.operator }}</div>
-                  <div v-if="item.reason" class="history-reason">
-                    驳回原因: {{ item.reason }}
+                  <!-- ponytail: 契约 K2——优先显示 reviewerName；历史行没有审核人时 operator 已带「审核人未记录」标注 -->
+                  <div class="history-operator">审核人: {{ item.reviewerName || item.operator }}</div>
+                  <div v-if="item.rejectReason || item.reason" class="history-reason">
+                    驳回原因: {{ item.rejectReason || item.reason }}
                   </div>
                   <div v-if="item.remark" class="history-remark">
                     备注: {{ item.remark }}

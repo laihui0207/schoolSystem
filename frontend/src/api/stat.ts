@@ -229,3 +229,81 @@ export const getSubjectStat = (params: SubjectStatQuery) => {
     params
   })
 }
+
+// ---------------------------------------------------------------- 区域（跨校）对比
+// 对应后端 RegionStatQuery / RegionStatResponse / RegionOptionResponse，仅超管可调用
+
+/** GET /stats/regions 单项 */
+export interface RegionOption {
+  regionCode: string
+  /** 该区域内启用状态的学校数 */
+  schoolCount: number
+}
+
+/** GET /stats/region 查询参数：考试按校建没有统一 ID，用 (year, term, examType) 对齐各校考试 */
+export interface RegionStatQuery {
+  regionCode: string
+  /** 学年，如 2024-2025（academic_term.year） */
+  year: string
+  /** 1 上学期 2 下学期 */
+  term: number
+  /** 1 月考 2 期中 3 期末 4 模拟 5 其他 */
+  examType: number
+}
+
+export interface RegionSchoolStat {
+  schoolId: number
+  schoolName: string
+  /** 该校该学期该类型最新一场已发布考试；没有时缺省 */
+  examId?: number
+  examName?: string
+  /** 至少有一科有效成绩的学生数 */
+  studentCount: number
+  averageScore: number
+  passRate: number
+  excellentRate: number
+  /** 均分名次，并列同名次；没有可比成绩的学校缺省（排在最后） */
+  rank?: number
+}
+
+export interface RegionSchoolSubjectAverage {
+  schoolId: number
+  averageScore: number
+}
+
+export interface RegionSubjectCompare {
+  /** 科目按名称跨校对齐，这里只是首个遇到的学校的科目 ID */
+  subjectId: number
+  subjectName: string
+  schools: RegionSchoolSubjectAverage[]
+}
+
+export interface RegionStat {
+  regionCode: string
+  examType: number
+  year: string
+  term: number
+  schools: RegionSchoolStat[]
+  subjects: RegionSubjectCompare[]
+}
+
+/**
+ * 区域（跨校）成绩对比
+ */
+export const getRegionStat = (params: RegionStatQuery) => {
+  return request<RegionStat>({
+    url: '/stats/region',
+    method: 'get',
+    params
+  })
+}
+
+/**
+ * 已配置区域编码的区域列表（下拉用）
+ */
+export const getRegionOptions = () => {
+  return request<RegionOption[]>({
+    url: '/stats/regions',
+    method: 'get'
+  })
+}

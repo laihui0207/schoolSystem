@@ -13,8 +13,12 @@ import com.school.module.school.mapper.SchoolMapper;
 import com.school.module.student.dto.StudentClassRow;
 import com.school.module.student.entity.ClassStudent;
 import com.school.module.student.entity.Student;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.school.module.student.mapper.ClassStudentMapper;
 import com.school.module.student.mapper.StudentMapper;
+import com.school.module.user.entity.SysUser;
+import com.school.module.user.enums.UserRole;
+import com.school.module.user.mapper.SysUserMapper;
 import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -41,6 +45,39 @@ public class StudentServiceImpl implements StudentService {
     private final SchoolMapper schoolMapper;
     // ponytail: 只读注入班级 Mapper 做存在性/同校校验，不往 class 模块加方法
     private final ClassMapper classMapper;
+    private final SysUserMapper sysUserMapper;
+
+    /**
+     * 解析更新后的登录账号绑定：null 保持不变，0 解绑，其他值必须是本校学生类型且未绑定别的档案的账号。
+     */
+    private Long resolveBoundUserId(Student existing, Long requested) {
+        if (requested == null) {
+            return existing.getUserId();
+        }
+        if (requested == 0L) {
+            return null;
+        }
+        if (requested.equals(existing.getUserId())) {
+            return requested;
+        }
+        SysUser user = sysUserMapper.selectById(requested);
+        if (user == null) {
+            throw new BusinessException("登录账号不存在");
+        }
+        if (!UserRole.STUDENT.getUserType().equals(user.getUserType())) {
+            throw new BusinessException("只能绑定学生类型的登录账号");
+        }
+        if (user.getSchoolId() != null && !user.getSchoolId().equals(existing.getSchoolId())) {
+            throw new BusinessException("登录账号与学生档案不属于同一学校");
+        }
+        Long occupied = studentMapper.selectCount(new LambdaQueryWrapper<Student>()
+                .eq(Student::getUserId, requested)
+                .ne(Student::getId, existing.getId()));
+        if (occupied > 0) {
+            throw new BusinessException("该登录账号已绑定其他学生档案");
+        }
+        return requested;
+    }
 
     private static final List<Integer> VALID_STATUS = Arrays.asList(0, 1, 2);
     private static final List<Integer> VALID_GENDER = Arrays.asList(1, 2);
@@ -109,7 +146,7 @@ public class StudentServiceImpl implements StudentService {
         updatedStudent.setId(existingStudent.getId());
         updatedStudent.setStudentNo(existingStudent.getStudentNo());
         updatedStudent.setSchoolId(existingStudent.getSchoolId());
-        updatedStudent.setUserId(existingStudent.getUserId());
+        updatedStudent.setUserId(resolveBoundUserId(existingStudent, request.getUserId()));
         updatedStudent.setName(request.getName() != null ? request.getName() : existingStudent.getName());
         updatedStudent.setGender(request.getGender() != null ? request.getGender() : existingStudent.getGender());
         updatedStudent.setBirthDate(request.getBirthDate() != null ? request.getBirthDate() : existingStudent.getBirthDate());

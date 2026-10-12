@@ -146,6 +146,22 @@ public class ScoreResponse {
      */
     private LocalDateTime reviewedAt;
 
+    // ponytail: 契约 K2——审核留痕三字段；reviewerName 由 Service 批量 selectBatchIds 回填
+    /**
+     * 审核人ID
+     */
+    private Long reviewerId;
+
+    /**
+     * 审核人姓名（realName 优先，否则 username）
+     */
+    private String reviewerName;
+
+    /**
+     * 驳回原因
+     */
+    private String rejectReason;
+
     /**
      * 备注
      */

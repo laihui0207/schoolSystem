@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
 import com.school.common.result.ResultCode;
+import com.school.module.config.service.ScoreRuleService;
 import com.school.module.exam.entity.Exam;
 import com.school.module.exam.mapper.ExamMapper;
 import com.school.module.notification.service.NotificationService;
@@ -56,6 +57,7 @@ public class ScoreChangeServiceImpl implements ScoreChangeService {
     private final ScoreService scoreService;
     private final NotificationService notificationService;
     private final TeacherScopeService teacherScopeService;
+    private final ScoreRuleService scoreRuleService;
 
     private static final int EXAM_STATUS_PUBLISHED = 3;
     private static final int CHANGE_STATUS_PENDING = 0;
@@ -95,6 +97,7 @@ public class ScoreChangeServiceImpl implements ScoreChangeService {
         }
 
         // 创建变更日志
+        LocalDateTime now = LocalDateTime.now();
         ScoreChangeLog changeLog = new ScoreChangeLog();
         changeLog.setScoreId(request.getScoreId());
         changeLog.setExamId(score.getExamId());
@@ -104,12 +107,36 @@ public class ScoreChangeServiceImpl implements ScoreChangeService {
         changeLog.setNewScore(request.getNewScore());
         changeLog.setChangeReason(request.getChangeReason());
         changeLog.setApplicantId(applicantId);
-        changeLog.setStatus(CHANGE_STATUS_PENDING); // 待审批
-        changeLog.setApplyTime(LocalDateTime.now());
+        changeLog.setApplyTime(now);
 
+        // ponytail: sys_config score.change.approval=false 时，管理员的修改免审批直接生效
+        //（status=1、approver=申请人、approveTime=now），并同步回写分数 / 重算排名 / 通知学生，
+        // 与 approveScoreChange 通过时的副作用一致；教师申请不受开关影响仍走审批——
+        // 开关关的是"管理员自审"这一步，不是放开所有人直接改已发布成绩。
+        if (isDirectApply()) {
+            changeLog.setStatus(CHANGE_STATUS_APPROVED);
+            changeLog.setApproverId(applicantId);
+            changeLog.setApproveTime(now);
+            changeLogMapper.insert(changeLog);
+
+            writeBackScore(score, changeLog);
+            scoreService.calculateAllRankings(score.getExamId());
+            notifyStudentOfApproval(score, changeLog);
+            return convertToResponse(changeLog);
+        }
+
+        changeLog.setStatus(CHANGE_STATUS_PENDING); // 待审批
         changeLogMapper.insert(changeLog);
 
         return convertToResponse(changeLog);
+    }
+
+    /**
+     * 是否免审批直接生效：当前为管理员（超管/校管理员）且审批开关已关闭
+     */
+    private boolean isDirectApply() {
+        boolean isAdmin = SecurityUtils.isSuperAdmin() || SecurityUtils.isSchoolAdmin();
+        return isAdmin && !scoreRuleService.changeApprovalRequired();
     }
 
     /**

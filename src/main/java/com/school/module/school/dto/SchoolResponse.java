@@ -38,6 +38,11 @@ public class SchoolResponse implements Serializable {
     private String schoolCode;
 
     /**
+     * 区域编码
+     */
+    private String regionCode;
+
+    /**
      * 学校类型
      */
     private String schoolType;

@@ -177,3 +177,13 @@ app:
     upload-path: ./uploads
     allowed-extensions: jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx
 
+  # PDF 成绩单配置：中文字体按顺序尝试（.ttc 用「路径,索引」指定子字体），全部不可读时回退 iText font-asian 内置的 fallback-font
+  pdf:
+    font-paths:
+      - C:/Windows/Fonts/simhei.ttf
+      - C:/Windows/Fonts/msyh.ttc,0
+      - /usr/share/fonts/truetype/wqy/wqy-microhei.ttc
+      - /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0
+    fallback-font: STSong-Light
+    fallback-encoding: UniGB-UCS2-H
+

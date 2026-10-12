@@ -2,6 +2,8 @@ package com.school.module.exam.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
+import com.school.module.dict.entity.DictData;
+import com.school.module.dict.service.DictService;
 import com.school.module.exam.dto.*;
 import com.school.module.exam.entity.Exam;
 import com.school.module.exam.entity.ExamSubject;
@@ -85,6 +87,10 @@ class ExamServiceTest {
 
     @Mock
     private ScoreWarningService scoreWarningService;
+
+    // ponytail: getExamTypeName 改为优先读 exam_type 字典；未 stub 时 Mockito 返回空列表，自然走内置表回落
+    @Mock
+    private DictService dictService;
 
     @InjectMocks
     private ExamServiceImpl examService;
@@ -481,6 +487,41 @@ class ExamServiceTest {
                 .hasMessageContaining("考试不存在");
 
         verify(examMapper).selectById(999L);
+    }
+
+    @Test
+    @DisplayName("应该优先用字典标签作为考试类型名_当 exam_type 字典含该值")
+    void shouldUseDictLabel_WhenExamTypeDictHasValue_ThenPreferDict() {
+        // Given
+        when(examMapper.selectById(1L)).thenReturn(mockExam);
+        when(examSubjectMapper.selectByExamId(1L)).thenReturn(Arrays.asList(mockExamSubject));
+        DictData midterm = new DictData();
+        midterm.setDictType("exam_type");
+        midterm.setDictValue("2");
+        midterm.setDictLabel("期中考试");
+        when(dictService.getDictDataByType("exam_type")).thenReturn(List.of(midterm));
+
+        // When
+        ExamResponse response = examService.getExamById(1L);
+
+        // Then
+        assertThat(response.getExamTypeName()).isEqualTo("期中考试");
+        verify(dictService).getDictDataByType("exam_type");
+    }
+
+    @Test
+    @DisplayName("应该回落内置名称_当 exam_type 字典没有该值")
+    void shouldFallbackToBuiltinName_WhenExamTypeDictMissing_ThenUseSwitch() {
+        // Given
+        when(examMapper.selectById(1L)).thenReturn(mockExam);
+        when(examSubjectMapper.selectByExamId(1L)).thenReturn(Arrays.asList(mockExamSubject));
+        when(dictService.getDictDataByType("exam_type")).thenReturn(Collections.emptyList());
+
+        // When
+        ExamResponse response = examService.getExamById(1L);
+
+        // Then
+        assertThat(response.getExamTypeName()).isEqualTo("期中");
     }
 
     @Test

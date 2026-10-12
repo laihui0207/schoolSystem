@@ -4,6 +4,8 @@ export interface School {
   id?: number
   schoolName: string
   schoolCode: string
+  /** 区域编码；同一编码的学校可在「区域分析」里跨校对比 */
+  regionCode?: string
   address?: string
   contactPhone?: string
   contactPerson?: string

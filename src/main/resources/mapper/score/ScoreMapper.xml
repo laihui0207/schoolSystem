@@ -23,6 +23,8 @@
             s.status,
             s.recorded_at,
             s.reviewed_at,
+            s.reviewer_id,
+            s.reject_reason,
             s.remark,
             s.created_at,
             s.updated_at
@@ -104,6 +106,8 @@
             status,
             recorded_at,
             reviewed_at,
+            reviewer_id,
+            reject_reason,
             remark,
             created_at,
             updated_at
@@ -128,7 +132,7 @@
             id, exam_id, student_id, subject_id, class_id, school_id,
             score, is_absent, rank_in_class, rank_in_grade, rank_in_school,
             total_rank_in_class, total_rank_in_grade, total_rank_in_school,
-            recorder_id, status, recorded_at, reviewed_at, remark, created_at, updated_at
+            recorder_id, status, recorded_at, reviewed_at, reviewer_id, reject_reason, remark, created_at, updated_at
         FROM score
         WHERE deleted = 0
           AND exam_id = #{examId}

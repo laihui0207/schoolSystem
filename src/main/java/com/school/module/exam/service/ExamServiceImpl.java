@@ -2,6 +2,8 @@ package com.school.module.exam.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
+import com.school.module.dict.entity.DictData;
+import com.school.module.dict.service.DictService;
 import com.school.module.exam.dto.ExamCreateRequest;
 import com.school.module.exam.dto.ExamProgressItemDto;
 import com.school.module.exam.dto.ExamProgressResponse;
@@ -29,6 +31,7 @@ import com.school.module.term.mapper.AcademicTermMapper;
 import com.school.module.warning.service.ScoreWarningService;
 import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
  *
  * @author School System
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExamServiceImpl implements ExamService {
@@ -67,6 +71,19 @@ public class ExamServiceImpl implements ExamService {
     private final ScoreService scoreService;
     private final NotificationService notificationService;
     private final ScoreWarningService scoreWarningService;
+    private final DictService dictService;
+
+    /** 考试类型字典编码（sys_dict_type.dict_type，V7 种子） */
+    private static final String DICT_EXAM_TYPE = "exam_type";
+    /** exam_type 字典快照有效期（毫秒） */
+    private static final long EXAM_TYPE_DICT_TTL_MILLIS = 60_000L;
+    /**
+     * exam_type 字典快照：dict_value → dict_label，整体替换而不是逐项修改。
+     * ponytail: convertToResponse 按行调用 getExamTypeName，列表页若每行查一次字典就是 N+1；
+     * 这里和 ScoreRuleServiceImpl 一样用时间戳做 60 秒本地缓存。
+     */
+    private volatile Map<String, String> examTypeLabels = Collections.emptyMap();
+    private volatile long examTypeLabelsLoadedAt = 0L;
 
     private static final List<Integer> VALID_EXAM_TYPES = Arrays.asList(1, 2, 3, 4, 5);
     private static final List<Integer> VALID_STATUS = Arrays.asList(0, 1, 2, 3);
@@ -631,6 +648,12 @@ public class ExamServiceImpl implements ExamService {
         if (examType == null) {
             return null;
         }
+        // ponytail: 优先读 sys_dict_data(exam_type) 的 dict_label，让"考试类型"名称可在字典页维护；
+        // 字典缺该值、被停用或读取失败时回落到下面的内置表，保证列表/详情始终有文案。
+        String label = examTypeLabels().get(String.valueOf(examType));
+        if (label != null && !label.isBlank()) {
+            return label;
+        }
         return switch (examType) {
             case 1 -> "月考";
             case 2 -> "期中";
@@ -639,6 +662,29 @@ public class ExamServiceImpl implements ExamService {
             case 5 -> "其他";
             default -> "未知";
         };
+    }
+
+    /**
+     * exam_type 字典的 value → label 快照，60 秒内复用；字典为空也缓存，避免空字典时每行都查库
+     */
+    private Map<String, String> examTypeLabels() {
+        long now = System.currentTimeMillis();
+        if (examTypeLabelsLoadedAt > 0 && now - examTypeLabelsLoadedAt < EXAM_TYPE_DICT_TTL_MILLIS) {
+            return examTypeLabels;
+        }
+        Map<String, String> loaded;
+        try {
+            List<DictData> rows = dictService.getDictDataByType(DICT_EXAM_TYPE);
+            loaded = rows == null ? Collections.emptyMap() : rows.stream()
+                    .filter(row -> row.getDictValue() != null && row.getDictLabel() != null)
+                    .collect(Collectors.toMap(DictData::getDictValue, DictData::getDictLabel, (a, b) -> a));
+        } catch (RuntimeException e) {
+            log.warn("读取 exam_type 字典失败，考试类型名称回落内置表: {}", e.getMessage());
+            loaded = Collections.emptyMap();
+        }
+        examTypeLabels = Collections.unmodifiableMap(loaded);
+        examTypeLabelsLoadedAt = now;
+        return examTypeLabels;
     }
 
     /**

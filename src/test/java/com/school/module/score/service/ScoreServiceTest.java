@@ -1,5 +1,6 @@
 package com.school.module.score.service;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
 import com.school.module.score.dto.*;
@@ -622,6 +623,73 @@ class ScoreServiceTest {
         Score updated = scoreCaptor.getValue();
         assertThat(updated.getStatus()).isEqualTo(1);
         assertThat(updated.getReviewedAt()).isNotNull();
+        // K2：审核人取当前登录用户（TestAuth.asSchoolAdmin 的 userId=100），通过时无驳回原因
+        assertThat(updated.getReviewerId()).isEqualTo(100L);
+        assertThat(updated.getRejectReason()).isNull();
+        // 原行没有旧驳回原因，不应多发一条清空 UPDATE
+        verify(scoreMapper, never()).update(isNull(), any(Wrapper.class));
+    }
+
+    @Test
+    @DisplayName("应该清空旧驳回原因_当驳回后重录再通过")
+    void shouldClearStaleRejectReason_WhenApproveAfterReject_ThenExtraUpdate() {
+        // Given: 上一轮被驳回、重录后回到待审核，但 reject_reason 还留着
+        mockScore.setRejectReason("上次分数录错");
+        ScoreReviewRequest reviewRequest = new ScoreReviewRequest();
+        reviewRequest.setScoreIds(Arrays.asList(1L));
+        reviewRequest.setResult(1);
+
+        when(scoreMapper.selectById(1L)).thenReturn(mockScore);
+        when(scoreMapper.updateById(any(Score.class))).thenReturn(1);
+
+        // When
+        scoreService.reviewScores(reviewRequest);
+
+        // Then: updateById 的 NOT_NULL 策略写不进 null，必须另发一条 set reject_reason = null
+        verify(scoreMapper).updateById(any(Score.class));
+        verify(scoreMapper).update(isNull(), any(Wrapper.class));
+    }
+
+    @Test
+    @DisplayName("应该允许通过已驳回成绩_当考试处于审核中无法重录")
+    void shouldApproveRejectedScore_WhenApproveAfterReject_ThenStatusApproved() {
+        // Given: 已驳回（status=2），考试在审核中教师无法重录，审核人必须能直接改判通过
+        mockScore.setStatus(2);
+        mockScore.setRejectReason("录错了");
+        ScoreReviewRequest reviewRequest = new ScoreReviewRequest();
+        reviewRequest.setScoreIds(Arrays.asList(1L));
+        reviewRequest.setResult(1);
+
+        when(scoreMapper.selectById(1L)).thenReturn(mockScore);
+        when(scoreMapper.updateById(any(Score.class))).thenReturn(1);
+
+        // When
+        scoreService.reviewScores(reviewRequest);
+
+        // Then: 写入 status=1，并清掉旧驳回原因
+        ArgumentCaptor<Score> captor = ArgumentCaptor.forClass(Score.class);
+        verify(scoreMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(1);
+        verify(scoreMapper).update(isNull(), any(Wrapper.class));
+    }
+
+    @Test
+    @DisplayName("应该跳过已驳回成绩_当再次驳回")
+    void shouldSkipRejectedScore_WhenRejectAgain_ThenNoUpdate() {
+        // Given
+        mockScore.setStatus(2);
+        ScoreReviewRequest reviewRequest = new ScoreReviewRequest();
+        reviewRequest.setScoreIds(Arrays.asList(1L));
+        reviewRequest.setResult(2);
+        reviewRequest.setRejectReason("再驳一次");
+
+        when(scoreMapper.selectById(1L)).thenReturn(mockScore);
+
+        // When
+        scoreService.reviewScores(reviewRequest);
+
+        // Then: 驳回只作用于待审核，已驳回的不再写库
+        verify(scoreMapper, never()).updateById(any(Score.class));
     }
 
     @Test
@@ -644,8 +712,76 @@ class ScoreServiceTest {
         verify(scoreMapper).updateById(scoreCaptor.capture());
         Score updated = scoreCaptor.getValue();
         assertThat(updated.getStatus()).isEqualTo(2);
-        // B-10：驳回原因以前缀写入 remark 留痕
-        assertThat(updated.getRemark()).isEqualTo("【驳回】分数录入错误");
+        // K2：驳回原因写独立列 reject_reason，审核人为当前用户；不再借用 remark
+        assertThat(updated.getRejectReason()).isEqualTo("分数录入错误");
+        assertThat(updated.getReviewerId()).isEqualTo(100L);
+        assertThat(updated.getRemark()).isNull();
+    }
+
+    @Test
+    @DisplayName("应该返回审核人与驳回原因_当审核历史有reviewerId")
+    void shouldGetReviewHistory_WhenReviewerIdPresent_ThenOperatorIsReviewer() {
+        // Given
+        Score reviewed = new Score();
+        reviewed.setId(1L);
+        reviewed.setSubjectId(1L);
+        reviewed.setStatus(2);
+        reviewed.setRecorderId(5L);
+        reviewed.setReviewerId(7L);
+        reviewed.setRejectReason("分数异常");
+        reviewed.setReviewedAt(LocalDateTime.of(2026, 10, 1, 9, 30));
+        SysUser reviewer = new SysUser();
+        reviewer.setId(7L);
+        reviewer.setUsername("head1");
+        reviewer.setRealName("王主任");
+
+        when(scoreMapper.selectByExamId(1L, 1L, 1L)).thenReturn(List.of(reviewed));
+        when(sysUserMapper.selectById(7L)).thenReturn(reviewer);
+
+        // When
+        List<ReviewHistoryDto> history = scoreService.getReviewHistory(1L, 1L, 1L);
+
+        // Then
+        assertThat(history).hasSize(1);
+        ReviewHistoryDto dto = history.get(0);
+        assertThat(dto.getAction()).isEqualTo("reject");
+        assertThat(dto.getReviewerId()).isEqualTo(7L);
+        assertThat(dto.getReviewerName()).isEqualTo("王主任");
+        assertThat(dto.getOperator()).isEqualTo("王主任");
+        assertThat(dto.getRejectReason()).isEqualTo("分数异常");
+        assertThat(dto.getReason()).isEqualTo("分数异常");
+        verify(sysUserMapper, never()).selectById(5L);
+    }
+
+    @Test
+    @DisplayName("应该退回录入人并标注_当历史审核记录没有reviewerId")
+    void shouldGetReviewHistory_WhenNoReviewerId_ThenFallbackToRecorderWithNote() {
+        // Given: V16 之前审核的行，reviewer_id 为空，remark 里的「【驳回】」文本不再解析
+        Score legacy = new Score();
+        legacy.setId(1L);
+        legacy.setSubjectId(1L);
+        legacy.setStatus(2);
+        legacy.setRecorderId(5L);
+        legacy.setRemark("【驳回】旧的驳回原因");
+        legacy.setReviewedAt(LocalDateTime.of(2026, 9, 1, 9, 30));
+        SysUser recorder = new SysUser();
+        recorder.setId(5L);
+        recorder.setUsername("teacher1");
+        recorder.setRealName("李老师");
+
+        when(scoreMapper.selectByExamId(1L, 1L, 1L)).thenReturn(List.of(legacy));
+        when(sysUserMapper.selectById(5L)).thenReturn(recorder);
+
+        // When
+        List<ReviewHistoryDto> history = scoreService.getReviewHistory(1L, 1L, 1L);
+
+        // Then
+        ReviewHistoryDto dto = history.get(0);
+        assertThat(dto.getReviewerId()).isNull();
+        assertThat(dto.getReviewerName()).isNull();
+        assertThat(dto.getOperator()).contains("李老师").contains("审核人未记录");
+        assertThat(dto.getRejectReason()).isNull();
+        assertThat(dto.getReason()).isNull();
     }
 
     @Test
@@ -727,10 +863,10 @@ class ScoreServiceTest {
 
         when(scoreMapper.selectByExamId(1L, 1L, 1L)).thenReturn(new ArrayList<>());
 
-        // When & Then
+        // When & Then: result=1 时既无待审核也无已驳回
         assertThatThrownBy(() -> scoreService.reviewScores(reviewRequest))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("没有待审核的成绩");
+                .hasMessageContaining("没有待审核或已驳回的成绩");
 
         verify(scoreMapper, never()).updateById(any(Score.class));
     }

@@ -36,6 +36,11 @@ public class School extends BaseEntity {
     private String schoolCode;
 
     /**
+     * 区域编码（跨校对比的分组键；V1 建表即有此列，此前 Java 层无引用）
+     */
+    private String regionCode;
+
+    /**
      * 学校类型：PUBLIC-公立，PRIVATE-私立
      */
     private String schoolType;

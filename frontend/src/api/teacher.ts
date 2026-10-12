@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { saveBlobAsFile, type RosterImportResult } from '@/api/student'
 
 export interface Teacher {
   id?: number
@@ -73,3 +74,27 @@ export const assignClass = (teacherId: number, classId: number, subjectId: numbe
 
 export const removeClassAssignment = (teacherId: number, classId: number, subjectId: number) =>
   request({ url: `/teachers/${teacherId}/classes`, method: 'delete', params: { classId, subjectId } })
+
+// ---------------------------------------------------------------- 名册导入导出（结果结构见 api/student.ts）
+
+export const downloadTeacherTemplate = () =>
+  request<Blob>({ url: '/teachers/template', method: 'get', responseType: 'blob' })
+
+export const importTeachers = (file: File, schoolId?: number) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (schoolId) formData.append('schoolId', String(schoolId))
+  return request<RosterImportResult>({
+    url: '/teachers/import',
+    method: 'post',
+    headers: { 'Content-Type': 'multipart/form-data' },
+    data: formData
+  })
+}
+
+export type TeacherExportQuery = Omit<TeacherQuery, 'pageNum' | 'pageSize'>
+
+export const exportTeachers = async (params: TeacherExportQuery): Promise<void> => {
+  const blob = await request<Blob>({ url: '/teachers/export', method: 'get', params, responseType: 'blob' })
+  await saveBlobAsFile(blob, `教师档案导出_${Date.now()}.xlsx`)
+}

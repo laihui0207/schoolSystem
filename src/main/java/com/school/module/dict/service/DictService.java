@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.school.module.dict.entity.DictData;
 import com.school.module.dict.entity.DictType;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 字典服务接口
@@ -20,6 +22,14 @@ public interface DictService extends IService<DictType> {
      * @return 字典数据列表
      */
     List<DictData> getDictDataByType(String dictType);
+
+    /**
+     * 一次查询多种字典类型的数据（仅 status=0，按 dict_sort 升序）
+     *
+     * @param dictTypes 字典类型编码集合，空白项忽略
+     * @return 类型编码 → 字典数据列表；请求过的类型即使没有数据也会出现（空列表），顺序与请求一致
+     */
+    Map<String, List<DictData>> getDictDataByTypes(Collection<String> dictTypes);
 
     /**
      * 创建字典类型

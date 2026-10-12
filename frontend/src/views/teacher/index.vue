@@ -22,6 +22,9 @@
           <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
           <el-button :icon="Refresh" @click="handleReset">重置</el-button>
           <el-button type="success" :icon="Plus" @click="handleAdd">新增</el-button>
+          <!-- ponytail: 导入/导出是管理员「数据导入导出」能力，仅 userType 1/2 可见；后端 @PreAuthorize 同步兜底 -->
+          <el-button v-if="isAdmin" :icon="Upload" @click="importVisible = true">导入</el-button>
+          <el-button v-if="isAdmin" :icon="Download" :loading="exporting" @click="handleExport">导出</el-button>
         </el-form-item>
       </el-form>
 
@@ -159,22 +162,44 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量导入对话框 -->
+    <RosterImportDialog
+      v-model="importVisible"
+      title="批量导入教师"
+      :template-api="downloadTeacherTemplate"
+      :import-api="importTeachers"
+      template-file-name="教师导入模板.xlsx"
+      :schools="schoolList"
+      :default-school-id="searchForm.schoolId"
+      @success="loadData"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, Edit, Delete, Upload, Download } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getTeacherList, createTeacher, updateTeacher, deleteTeacher,
   getClassAssignments, assignClass, removeClassAssignment,
+  downloadTeacherTemplate, importTeachers, exportTeachers,
   type Teacher, type ClassAssignment
 } from '@/api/teacher'
 import { getSchoolList, type School } from '@/api/school'
 import { getAllSubjects, type Subject } from '@/api/subject'
 import { getClassList, setHeadTeacher, type Class } from '@/api/class'
+import { useUserStore } from '@/stores/user'
+import { handleError } from '@/utils/errorHandler'
+import RosterImportDialog from '@/components/RosterImportDialog.vue'
+
+const userStore = useUserStore()
+// ponytail: 管理员判定用 userType（1 超管 / 2 校管），与 MainLayout、路由守卫口径一致
+const isAdmin = computed(() => [1, 2].includes(userStore.userInfo?.userType ?? 0))
+const importVisible = ref(false)
+const exporting = ref(false)
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -247,6 +272,26 @@ const loadClassAssignments = async (teacherId: number) => {
 
 const handleSearch = () => { pagination.pageNum = 1; loadData() }
 const handleReset = () => { Object.assign(searchForm, { name: '', teacherNo: '', schoolId: undefined, subjectId: undefined }); handleSearch() }
+
+/**
+ * 按搜索栏当前条件导出（与列表同一条查询）
+ */
+const handleExport = async () => {
+  exporting.value = true
+  try {
+    await exportTeachers({
+      name: searchForm.name || undefined,
+      teacherNo: searchForm.teacherNo || undefined,
+      schoolId: searchForm.schoolId,
+      subjectId: searchForm.subjectId
+    })
+  } catch (e) {
+    // ponytail: blob 通道的业务错误（如「没有教师数据」）由 exportTeachers 转成 Error 抛出；HTTP 错误拦截器已提示，handleError 会跳过
+    handleError(e)
+  } finally {
+    exporting.value = false
+  }
+}
 
 const handleAdd = () => {
   dialogTitle.value = '新增教师'

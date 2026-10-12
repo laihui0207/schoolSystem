@@ -5,12 +5,16 @@ import com.school.common.result.Result;
 import com.school.module.teacher.dto.TeacherCreateRequest;
 import com.school.module.teacher.dto.TeacherQueryRequest;
 import com.school.module.teacher.dto.TeacherResponse;
+import com.school.module.student.roster.RosterImportResult;
 import com.school.module.teacher.dto.TeacherUpdateRequest;
+import com.school.module.teacher.service.TeacherRosterService;
 import com.school.module.teacher.service.TeacherService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +29,37 @@ import java.util.List;
 public class TeacherController {
 
     private final TeacherService teacherService;
+    private final TeacherRosterService teacherRosterService;
+
+    /**
+     * 下载教师导入模板
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @GetMapping("/template")
+    public void downloadTemplate(HttpServletResponse response) {
+        teacherRosterService.downloadTemplate(response);
+    }
+
+    /**
+     * 批量导入教师（multipart：file 必填；schoolId 超管必填、校管理员可省略）
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @PostMapping("/import")
+    public Result<RosterImportResult> importTeachers(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) Long schoolId) {
+        return Result.success(teacherRosterService.importTeachers(file, schoolId));
+    }
+
+    /**
+     * 按当前筛选条件导出教师档案（含主教科目、账号用户名）
+     */
+    // ponytail: 导出列含账号用户名，与导入同为管理员专属
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @GetMapping("/export")
+    public void exportTeachers(TeacherQueryRequest request, HttpServletResponse response) {
+        teacherRosterService.exportTeachers(request, response);
+    }
 
     /**
      * 创建教师

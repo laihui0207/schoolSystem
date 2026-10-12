@@ -1,6 +1,7 @@
 package com.school.module.score.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.exception.BusinessException;
@@ -62,10 +63,12 @@ public class ScoreServiceImpl implements ScoreService {
     private static final List<Integer> VALID_STATUS = Arrays.asList(0, 1, 2);
     private static final DateTimeFormatter DT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int REMARK_MAX_LENGTH = 500;
+    /** reject_reason VARCHAR(500) */
+    private static final int REJECT_REASON_MAX_LENGTH = 500;
     private static final int EXAM_STATUS_PUBLISHED = 3;
+    private static final int SCORE_STATUS_PENDING = 0;
+    private static final int SCORE_STATUS_APPROVED = 1;
     private static final int SCORE_STATUS_REJECTED = 2;
-    /** 驳回原因暂存于 remark 的前缀标记（Score 暂无 reject_reason 列） */
-    private static final String REJECT_REMARK_PREFIX = "【驳回】";
     /** 无班级归属的脏数据在排名分组时的占位键 */
     private static final long NO_CLASS_KEY = Long.MIN_VALUE;
 
@@ -244,7 +247,9 @@ public class ScoreServiceImpl implements ScoreService {
         } else {
             checkTeacherScope(score.getClassId(), score.getSubjectId());
         }
-        return convertToResponse(score);
+        ScoreResponse response = convertToResponse(score);
+        fillReviewerNames(List.of(response));
+        return response;
     }
 
     @Override
@@ -310,6 +315,7 @@ public class ScoreServiceImpl implements ScoreService {
                     r.setStudentNo(stu.getStudentNo());
                 }
             });
+            fillReviewerNames(responses);
         }
 
         responsePage.setRecords(responses);
@@ -333,9 +339,11 @@ public class ScoreServiceImpl implements ScoreService {
         Page<Score> page = new Page<>(1, 100);
         Page<Score> resultPage = scoreMapper.selectPageByQuery(page, request);
 
-        return resultPage.getRecords().stream()
+        List<ScoreResponse> responses = resultPage.getRecords().stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
+        fillReviewerNames(responses);
+        return responses;
     }
 
     @Override
@@ -357,6 +365,8 @@ public class ScoreServiceImpl implements ScoreService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        // ponytail: 契约 K2——审核人取当前登录用户，不再让前端传；超管/校管/班主任都有 userId
+        Long reviewerId = SecurityUtils.currentUserId();
 
         for (Long scoreId : resolveScoreIds(request)) {
             Score score = scoreMapper.selectById(scoreId);
@@ -367,8 +377,10 @@ public class ScoreServiceImpl implements ScoreService {
             // 教师只能审核自己任教班级+科目的成绩
             checkTeacherScope(score.getClassId(), score.getSubjectId());
 
-            // 只能审核待审核状态的成绩
-            if (score.getStatus() != 0) {
+            // ponytail: 通过可作用于「待审核」与「已驳回」两种状态——考试进入审核中后教师已无法重录，
+            // 若已驳回的成绩不能被再次通过，整场考试就永远发布不了（publishExam 拦所有非已通过）。
+            // 驳回只作用于「待审核」，已通过的成绩要改走成绩变更审批，不在这里反转。
+            if (!reviewableBy(score.getStatus(), request.getResult())) {
                 continue;
             }
 
@@ -386,13 +398,24 @@ public class ScoreServiceImpl implements ScoreService {
             updatedScore.setRecordedAt(score.getRecordedAt());
             updatedScore.setStatus(request.getResult());
             updatedScore.setReviewedAt(now);
+            updatedScore.setReviewerId(reviewerId);
             if (request.getResult() == SCORE_STATUS_REJECTED) {
-                // ponytail: B-10——Score 没有 reject_reason 列，本轮不加列；驳回原因以「【驳回】」前缀写进 remark 作临时留痕，
-                // getReviewHistory 从这里读回 reason；后续加列后应迁回独立字段
-                updatedScore.setRemark(truncate(REJECT_REMARK_PREFIX + request.getRejectReason(), REMARK_MAX_LENGTH));
+                // ponytail: 契约 K2——驳回原因写独立列 reject_reason；remark 保留给录入人备注，
+                // 历史数据里以「【驳回】」开头的 remark 留原样不迁移
+                updatedScore.setRejectReason(truncate(request.getRejectReason(), REJECT_REASON_MAX_LENGTH));
             }
 
             scoreMapper.updateById(updatedScore);
+
+            if (request.getResult() == SCORE_STATUS_APPROVED && score.getRejectReason() != null) {
+                // ponytail: updateById 走 NOT_NULL 策略写不进 null；「驳回→重录→通过」的行要显式清掉旧原因，
+                // 否则 ScoreResponse.rejectReason 会把已通过的成绩继续标成有驳回原因。
+                // 用字符串列名的 UpdateWrapper 而非 lambda：纯 Mockito 单测里没有 TableInfo，lambda 列缓存解析会抛异常；
+                // setSql 直接写 NULL 字面量，绕开 JDBC 对 null 参数的类型推断
+                scoreMapper.update(null, new UpdateWrapper<Score>()
+                        .eq("id", score.getId())
+                        .setSql("reject_reason = NULL"));
+            }
         }
     }
 
@@ -410,16 +433,30 @@ public class ScoreServiceImpl implements ScoreService {
         // ponytail: 复用 selectByExamId(examId, classId) 再按科目/状态内存过滤，一个班一次考试几百行以内，不值得加新 SQL
         // ponytail: B-2——超管 schoolId 为 null，currentSchoolId() 直接抛 FORBIDDEN；与 calculateRankings 一致按 exam.school_id 分流
         Long schoolId = resolveExamSchoolId(request.getExamId());
-        List<Long> pendingIds = scoreMapper.selectByExamId(schoolId, request.getExamId(), request.getClassId()).stream()
+        List<Long> targetIds = scoreMapper.selectByExamId(schoolId, request.getExamId(), request.getClassId()).stream()
                 .filter(s -> request.getSubjectId().equals(s.getSubjectId()))
-                .filter(s -> s.getStatus() != null && s.getStatus() == 0)
+                .filter(s -> reviewableBy(s.getStatus(), request.getResult()))
                 .map(Score::getId)
                 .collect(Collectors.toList());
 
-        if (pendingIds.isEmpty()) {
-            throw new BusinessException("该考试/班级/科目下没有待审核的成绩");
+        if (targetIds.isEmpty()) {
+            throw new BusinessException(request.getResult() == SCORE_STATUS_APPROVED
+                    ? "该考试/班级/科目下没有待审核或已驳回的成绩"
+                    : "该考试/班级/科目下没有待审核的成绩");
         }
-        return pendingIds;
+        return targetIds;
+    }
+
+    /**
+     * 某条成绩当前状态能否被指定的审核动作处理：
+     * 通过（1）接受 待审核(0) 与 已驳回(2)；驳回（2）只接受 待审核(0)。
+     */
+    private static boolean reviewableBy(Integer status, Integer result) {
+        int current = status == null ? SCORE_STATUS_PENDING : status;
+        if (result == SCORE_STATUS_APPROVED) {
+            return current == SCORE_STATUS_PENDING || current == SCORE_STATUS_REJECTED;
+        }
+        return current == SCORE_STATUS_PENDING;
     }
 
     @Override
@@ -695,10 +732,35 @@ public class ScoreServiceImpl implements ScoreService {
                 .statusName(getStatusName(score.getStatus()))
                 .recordedAt(score.getRecordedAt())
                 .reviewedAt(score.getReviewedAt())
+                .reviewerId(score.getReviewerId())
+                .rejectReason(score.getRejectReason())
                 .remark(score.getRemark())
                 .createdAt(score.getCreatedAt())
                 .updatedAt(score.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * 批量回填审核人姓名（realName 优先，否则 username）
+     * <p>
+     * ponytail: 契约 K2——一次 selectBatchIds 回填整页，不在 convertToResponse 里逐行查用户
+     */
+    private void fillReviewerNames(List<ScoreResponse> responses) {
+        Set<Long> reviewerIds = responses.stream()
+                .map(ScoreResponse::getReviewerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (reviewerIds.isEmpty()) {
+            return;
+        }
+        Map<Long, String> nameMap = sysUserMapper.selectBatchIds(reviewerIds).stream()
+                .collect(Collectors.toMap(SysUser::getId, ScoreServiceImpl::displayName, (a, b) -> a));
+        responses.forEach(r -> r.setReviewerName(nameMap.get(r.getReviewerId())));
+    }
+
+    private static String displayName(SysUser user) {
+        // ponytail: Collectors.toMap 不接受 null 值，username 理论上非空但这里兜底成空串
+        return user.getRealName() != null ? user.getRealName() : Objects.toString(user.getUsername(), "");
     }
 
     /**
@@ -1063,22 +1125,28 @@ public class ScoreServiceImpl implements ScoreService {
                 .max(Comparator.comparing(Score::getReviewedAt))
                 .orElse(reviewed.get(0));
 
-        String reviewerName = "";
-        if (latest.getRecorderId() != null) {
-            SysUser reviewer = sysUserMapper.selectById(latest.getRecorderId());
-            if (reviewer != null) {
-                reviewerName = reviewer.getRealName() != null ? reviewer.getRealName() : reviewer.getUsername();
-            }
-        }
         ReviewHistoryDto dto = new ReviewHistoryDto();
         dto.setId(latest.getId());
-        dto.setOperator(reviewerName);
         dto.setOperateTime(latest.getReviewedAt().format(DT_FMT));
-        dto.setAction(latest.getStatus() == 1 ? "approve" : "reject");
-        // ponytail: B-10——驳回原因暂存于 remark 的「【驳回】」前缀段，回传给前端 ReviewHistory.reason
-        String remark = latest.getRemark();
-        if (latest.getStatus() == SCORE_STATUS_REJECTED && remark != null && remark.startsWith(REJECT_REMARK_PREFIX)) {
-            dto.setReason(remark.substring(REJECT_REMARK_PREFIX.length()));
+        dto.setAction(latest.getStatus() == SCORE_STATUS_APPROVED ? "approve" : "reject");
+
+        // ponytail: 契约 K2——operator 以 reviewer_id 为准；V16 之前审核的历史行没有审核人，
+        // 退回录入人并明确标注，不要让前端把录入人误当审核人
+        if (latest.getReviewerId() != null) {
+            SysUser reviewer = sysUserMapper.selectById(latest.getReviewerId());
+            String reviewerName = reviewer != null ? displayName(reviewer) : "";
+            dto.setReviewerId(latest.getReviewerId());
+            dto.setReviewerName(reviewerName);
+            dto.setOperator(reviewerName);
+        } else {
+            SysUser recorder = latest.getRecorderId() != null ? sysUserMapper.selectById(latest.getRecorderId()) : null;
+            dto.setOperator(recorder != null ? displayName(recorder) + "（录入人，审核人未记录）" : "（审核人未记录）");
+        }
+
+        if (latest.getStatus() == SCORE_STATUS_REJECTED) {
+            // ponytail: 契约 K2——驳回原因只读 reject_reason 列；remark 里历史的「【驳回】」文本留原样不解析
+            dto.setRejectReason(latest.getRejectReason());
+            dto.setReason(latest.getRejectReason());
         }
         return List.of(dto);
     }

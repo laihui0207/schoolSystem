@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.log.mapper.OperationLogMapper">
+
+    <!--
+      分页查询操作日志。
+      ponytail: sys_operation_log 没有 school_id，校管理员的租户过滤靠 JOIN sys_user 做：
+      只有 user_id 落在本校用户上的日志可见；匿名日志（登录失败等 user_id 为 null）天然被 JOIN 过滤掉，
+      只有超管（schoolId 为 null，不 JOIN）能看到。schoolId 必须来自 SecurityUtils，不能来自请求参数。
+    -->
+    <select id="selectPageByQuery" resultType="com.school.module.log.entity.OperationLog">
+        SELECT
+            l.id,
+            l.user_id,
+            l.username,
+            l.operation,
+            l.method,
+            l.params,
+            l.ip,
+            l.location,
+            l.status,
+            l.error_msg,
+            l.execute_time,
+            l.created_at
+        FROM sys_operation_log l
+        <if test="schoolId != null">
+            JOIN sys_user u ON u.id = l.user_id AND u.school_id = #{schoolId}
+        </if>
+        <where>
+            <if test="request.username != null and request.username != ''">
+                AND l.username LIKE CONCAT('%', #{request.username}, '%')
+            </if>
+            <if test="request.operation != null and request.operation != ''">
+                AND l.operation LIKE CONCAT('%', #{request.operation}, '%')
+            </if>
+            <if test="request.status != null">
+                AND l.status = #{request.status}
+            </if>
+            <if test="request.startTime != null">
+                AND l.created_at &gt;= #{request.startTime}
+            </if>
+            <if test="request.endTime != null">
+                AND l.created_at &lt;= #{request.endTime}
+            </if>
+        </where>
+        ORDER BY l.created_at DESC, l.id DESC
+    </select>
+
+</mapper>

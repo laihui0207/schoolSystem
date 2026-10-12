@@ -29,6 +29,12 @@ public class SchoolUpdateRequest implements Serializable {
     private String schoolName;
 
     /**
+     * 区域编码
+     */
+    @Size(max = 20, message = "区域编码长度不能超过20个字符")
+    private String regionCode;
+
+    /**
      * 学校类型
      */
     @Size(max = 20, message = "学校类型长度不能超过20个字符")

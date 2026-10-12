@@ -178,6 +178,12 @@
             <version>7.2.5</version>
             <type>pom</type>
         </dependency>
+        <!-- ponytail: iText 内置 CJK 字体（STSong-Light/UniGB-UCS2-H），服务器没有任何中文 TTF 时成绩单 PDF 仍能出字 -->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>font-asian</artifactId>
+            <version>7.2.5</version>
+        </dependency>
 
         <!-- Knife4j (Swagger UI) -->
         <dependency>

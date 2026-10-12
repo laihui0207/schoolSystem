@@ -7,6 +7,7 @@ import com.school.common.result.ResultCode;
 import com.school.module.auth.dto.CaptchaResponse;
 import com.school.module.auth.dto.LoginRequest;
 import com.school.module.auth.dto.LoginResponse;
+import com.school.module.config.service.ScoreRuleService;
 import com.school.module.user.entity.SysUser;
 import com.school.module.user.enums.UserRole;
 import com.school.module.user.mapper.SysUserMapper;
@@ -47,6 +48,7 @@ public class AuthService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final UserDetailsService userDetailsService;
     private final RefreshTokenStore refreshTokenStore;
+    private final ScoreRuleService scoreRuleService;
 
     @Value("${app.captcha.enabled:true}")
     private Boolean captchaEnabled;
@@ -86,6 +88,14 @@ public class AuthService {
                 throw new BusinessException(ResultCode.USER_NOT_FOUND);
             }
 
+            // ponytail: 维护模式检查放在密码校验之后——"系统维护中"只回给凭证正确的用户，
+            // 不会变成探测账号是否存在的信道；判断管理员要用 sys_user.user_type，也只有到这里才拿得到。
+            // BusinessException 不是 AuthenticationException，不会被下面的 catch 吞成 LOGIN_FAIL。
+            if (scoreRuleService.maintenanceMode() && !isAdminAccount(user)) {
+                log.warn("维护模式拒绝登录: username={}, userType={}", user.getUsername(), user.getUserType());
+                throw new BusinessException(ResultCode.SERVICE_UNAVAILABLE, "系统维护中，请稍后再试");
+            }
+
             // 更新最后登录时间
             user.setLastLoginAt(LocalDateTime.now());
             userMapper.updateById(user);
@@ -115,6 +125,15 @@ public class AuthService {
             log.error("登录失败: username={}, error={}", request.getUsername(), e.getMessage());
             throw new BusinessException(ResultCode.LOGIN_FAIL);
         }
+    }
+
+    /**
+     * 是否管理员账号（超级管理员 / 校管理员）：维护模式下仍允许登录
+     */
+    private boolean isAdminAccount(SysUser user) {
+        Integer userType = user.getUserType();
+        return UserRole.SUPER_ADMIN.getUserType().equals(userType)
+                || UserRole.ADMIN.getUserType().equals(userType);
     }
 
     /**

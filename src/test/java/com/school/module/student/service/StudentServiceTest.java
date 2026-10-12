@@ -54,6 +54,9 @@ class StudentServiceTest {
     @Mock
     private ClassMapper classMapper;
 
+    @Mock
+    private com.school.module.user.mapper.SysUserMapper sysUserMapper;
+
     @InjectMocks
     private StudentServiceImpl studentService;
 

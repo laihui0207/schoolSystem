@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.school.common.exception.BusinessException;
 import com.school.common.result.ResultCode;
 import com.school.security.service.TeacherScopeService;
+import com.school.module.config.service.ScoreRuleService;
 import com.school.module.class_module.entity.SchoolClass;
 import com.school.module.class_module.mapper.ClassMapper;
 import com.school.module.exam.entity.Exam;
@@ -15,12 +16,16 @@ import com.school.module.grade.entity.Grade;
 import com.school.module.grade.mapper.GradeMapper;
 import com.school.module.score.entity.Score;
 import com.school.module.score.mapper.ScoreMapper;
+import com.school.module.school.entity.School;
+import com.school.module.school.mapper.SchoolMapper;
 import com.school.module.stat.dto.*;
 import com.school.module.student.entity.Student;
 import com.school.module.student.mapper.StudentMapper;
 import com.school.module.subject.entity.Subject;
 import com.school.module.subject.mapper.SubjectMapper;
 import com.school.module.teacher.entity.TeacherClass;
+import com.school.module.term.entity.AcademicTerm;
+import com.school.module.term.mapper.AcademicTermMapper;
 import com.school.security.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,14 +48,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class StatServiceImpl implements StatService {
 
-    // ponytail: 及格/优秀线不再写死 60/85，改为按科目配置折算（见 subjectLines）；这里只保留兜底满分与比例
+    // ponytail: 及格/优秀线不再写死 60/85，改为按科目配置折算（见 subjectLines）；这里只保留兜底满分
     private static final BigDecimal DEFAULT_FULL_SCORE = BigDecimal.valueOf(100);
-    private static final BigDecimal PASS_RATIO = new BigDecimal("0.6");
-    private static final BigDecimal EXCELLENT_RATIO = new BigDecimal("0.85");
+    // ponytail: K1 —— 比例改从 ScoreRuleService（sys_config score.pass.line / score.excellent.line）读取；
+    // 这两个常量只在配置服务返回空或非正数时兜底，保证统计不会因配置损坏而抛错
+    private static final BigDecimal DEFAULT_PASS_RATIO = new BigDecimal("0.60");
+    private static final BigDecimal DEFAULT_EXCELLENT_RATIO = new BigDecimal("0.85");
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     private static final int TOP_STUDENT_LIMIT = 10;
     // ponytail: 契约 S —— 学生只看已发布考试，与 ExamServiceImpl.STATUS_PUBLISHED 同值
     private static final int EXAM_STATUS_PUBLISHED = 3;
+    // ponytail: 停用（status=0）的学校在业务上等于已移除（见 api/school.ts），不参与区域对比也不计入区域学校数
+    private static final int SCHOOL_STATUS_ENABLED = 1;
 
     private final ScoreMapper scoreMapper;
     private final ClassMapper classMapper;
@@ -59,7 +68,10 @@ public class StatServiceImpl implements StatService {
     private final ExamMapper examMapper;
     private final ExamSubjectMapper examSubjectMapper;
     private final GradeMapper gradeMapper;
+    private final SchoolMapper schoolMapper;
+    private final AcademicTermMapper academicTermMapper;
     private final TeacherScopeService teacherScopeService;
+    private final ScoreRuleService scoreRuleService;
 
     @Override
     public PersonalStatResponse getPersonalStat(Long examId, Long studentId) {
@@ -572,6 +584,241 @@ public class StatServiceImpl implements StatService {
                 .build();
     }
 
+    // ---------------------------------------------------------------- 区域（跨校）对比
+
+    @Override
+    public RegionStatResponse getRegionStat(RegionStatQuery query) {
+        // ponytail: Controller 已 @PreAuthorize 超管，这里再拦一次，防止被 AI 工具或其他 Service 直接调用时绕过
+        assertSuperAdmin("只有超级管理员可以查看区域对比");
+        validateRegionQuery(query);
+        String regionCode = query.getRegionCode().trim();
+        List<School> schools = regionSchools(regionCode);
+        Set<Long> schoolIds = schools.stream().map(School::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, Exam> examBySchool = schoolIds.isEmpty()
+                ? Collections.emptyMap()
+                : latestPublishedExamBySchool(schoolIds, query);
+
+        // ponytail: 超管下 currentSchoolIdForQuery() 为 null、租户插件也跳过，成绩必须按学校显式过滤；每校一次 selectByExamId，学校数有限
+        Map<Long, List<Score>> scoresBySchool = new LinkedHashMap<>();
+        for (School school : schools) {
+            Exam exam = examBySchool.get(school.getId());
+            scoresBySchool.put(school.getId(), exam == null
+                    ? Collections.<Score>emptyList()
+                    : scoreMapper.selectByExamId(school.getId(), exam.getId(), null));
+        }
+        Set<Long> allSubjectIds = scoresBySchool.values().stream()
+                .flatMap(List::stream)
+                .map(Score::getSubjectId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, Subject> subjects = byId(subjectMapper, allSubjectIds, Subject::getId);
+
+        List<RegionStatResponse.SchoolStat> ranked = new ArrayList<>();
+        List<RegionStatResponse.SchoolStat> unranked = new ArrayList<>();
+        Map<String, RegionStatResponse.SubjectCompare> subjectCompares = new LinkedHashMap<>();
+        for (School school : schools) {
+            Exam exam = examBySchool.get(school.getId());
+            List<Score> scores = scoresBySchool.get(school.getId());
+            Summary summary = exam == null
+                    ? summarize(Collections.<BigDecimal>emptyList())
+                    : schoolSummary(exam, scores, subjects);
+            RegionStatResponse.SchoolStat stat = schoolStat(school, exam, summary);
+            // ponytail: 没有该学期该类型已发布考试、或一条有效成绩都没有的学校仍返回（前端显示「—」），但不参与排名和科目对比
+            if (summary.count() == 0) {
+                unranked.add(stat);
+                continue;
+            }
+            ranked.add(stat);
+            collectSubjectAverages(subjectCompares, school.getId(), validScores(scores), subjects);
+        }
+        assignSchoolRanks(ranked);
+
+        List<RegionStatResponse.SchoolStat> all = new ArrayList<>(ranked);
+        all.addAll(unranked);
+        return RegionStatResponse.builder()
+                .regionCode(regionCode)
+                .examType(query.getExamType())
+                .year(query.getYear().trim())
+                .term(query.getTerm())
+                .schools(all)
+                .subjects(new ArrayList<>(subjectCompares.values()))
+                .build();
+    }
+
+    @Override
+    public List<RegionOptionResponse> listRegions() {
+        assertSuperAdmin("只有超级管理员可以查看区域列表");
+        List<School> schools = schoolMapper.selectList(new LambdaQueryWrapper<School>()
+                .isNotNull(School::getRegionCode)
+                .ne(School::getRegionCode, "")
+                .eq(School::getStatus, SCHOOL_STATUS_ENABLED));
+        // school 表很小，去重计数在内存做，省一段 resultType="map" 的手写 SQL（PG 驼峰别名坑）
+        Map<String, Integer> counts = new TreeMap<>();
+        for (School school : schools) {
+            String code = school.getRegionCode() == null ? "" : school.getRegionCode().trim();
+            if (!code.isEmpty()) {
+                counts.merge(code, 1, Integer::sum);
+            }
+        }
+        return counts.entrySet().stream()
+                .map(entry -> RegionOptionResponse.builder()
+                        .regionCode(entry.getKey())
+                        .schoolCount(entry.getValue())
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Controller 侧有 @Valid，这里再查一遍是为了直接调用 Service 的路径（AI 工具、其他 Service）
+     */
+    private void validateRegionQuery(RegionStatQuery query) {
+        if (query == null
+                || query.getRegionCode() == null || query.getRegionCode().trim().isEmpty()
+                || query.getYear() == null || query.getYear().trim().isEmpty()
+                || query.getTerm() == null || query.getExamType() == null) {
+            throw new BusinessException("区域编码、学年、学期、考试类型均不能为空");
+        }
+    }
+
+    /**
+     * 区域内启用状态的学校，按 ID 升序
+     */
+    private List<School> regionSchools(String regionCode) {
+        return schoolMapper.selectList(new LambdaQueryWrapper<School>()
+                .eq(School::getRegionCode, regionCode)
+                .eq(School::getStatus, SCHOOL_STATUS_ENABLED)
+                .orderByAsc(School::getId));
+    }
+
+    /**
+     * 每校在 (year, term, examType) 下 exam_date 最新的一场已发布考试
+     */
+    private Map<Long, Exam> latestPublishedExamBySchool(Set<Long> schoolIds, RegionStatQuery query) {
+        // ponytail: 考试按学校建、term_id 跨校不同，没有统一考试 ID；先用各校 academic_term 的 (year, term) 对齐出 term_id 集合
+        List<AcademicTerm> terms = academicTermMapper.selectList(new LambdaQueryWrapper<AcademicTerm>()
+                .in(AcademicTerm::getSchoolId, schoolIds)
+                .eq(AcademicTerm::getYear, query.getYear().trim())
+                .eq(AcademicTerm::getTerm, query.getTerm()));
+        Set<Long> termIds = terms.stream().map(AcademicTerm::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (termIds.isEmpty()) {
+            // ponytail: MyBatis-Plus 对空集合 in() 会生成非法 SQL，必须先短路
+            return Collections.emptyMap();
+        }
+        List<Exam> exams = examMapper.selectList(new LambdaQueryWrapper<Exam>()
+                .in(Exam::getSchoolId, schoolIds)
+                .in(Exam::getTermId, termIds)
+                .eq(Exam::getExamType, query.getExamType())
+                .eq(Exam::getStatus, EXAM_STATUS_PUBLISHED));
+        Map<Long, Exam> latest = new HashMap<>();
+        for (Exam exam : exams) {
+            if (exam.getSchoolId() == null) {
+                continue;
+            }
+            Exam current = latest.get(exam.getSchoolId());
+            if (current == null || isLaterExam(exam, current)) {
+                latest.put(exam.getSchoolId(), exam);
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * ponytail: 每校取 exam_date 最新的一场；日期相同或都为空时取 id 更大的，有日期的优先于无日期的，保证结果确定
+     */
+    private static boolean isLaterExam(Exam candidate, Exam current) {
+        LocalDate a = candidate.getExamDate();
+        LocalDate b = current.getExamDate();
+        if (a != null && b != null && !a.isEqual(b)) {
+            return a.isAfter(b);
+        }
+        if ((a == null) != (b == null)) {
+            return a != null;
+        }
+        long candidateId = candidate.getId() == null ? Long.MIN_VALUE : candidate.getId();
+        long currentId = current.getId() == null ? Long.MIN_VALUE : current.getId();
+        return candidateId > currentId;
+    }
+
+    /**
+     * 一所学校整场考试的总分口径汇总（与 getClassStat 一致：分母 = 至少一科有效成绩的学生数，线按本场各科折算求和）
+     */
+    private Summary schoolSummary(Exam exam, List<Score> scores, Map<Long, Subject> subjects) {
+        Set<Long> subjectIds = ids(scores, Score::getSubjectId);
+        Map<Long, ScoreLine> lines = subjectLines(exam.getId(), subjectIds, subjects);
+        return summarize(new ArrayList<>(studentTotals(scores).values()), totalLine(scores, lines));
+    }
+
+    private RegionStatResponse.SchoolStat schoolStat(School school, Exam exam, Summary summary) {
+        return RegionStatResponse.SchoolStat.builder()
+                .schoolId(school.getId())
+                .schoolName(school.getSchoolName())
+                .examId(exam == null ? null : exam.getId())
+                .examName(exam == null ? null : exam.getExamName())
+                .studentCount(summary.count())
+                .averageScore(summary.average())
+                .passRate(summary.passRate())
+                .excellentRate(summary.excellentRate())
+                .build();
+    }
+
+    /**
+     * 把某校各科均分并入跨校科目对比；科目按 subjectKey 跨校对齐
+     */
+    private void collectSubjectAverages(Map<String, RegionStatResponse.SubjectCompare> compares, Long schoolId,
+                                        List<Score> validScores, Map<Long, Subject> subjects) {
+        groupValues(validScores, Score::getSubjectId).forEach((subjectId, values) -> {
+            Subject subject = subjects.get(subjectId);
+            RegionStatResponse.SubjectCompare compare = compares.computeIfAbsent(subjectKey(subject, subjectId),
+                    key -> RegionStatResponse.SubjectCompare.builder()
+                            .subjectId(subjectId)
+                            .subjectName(subject == null || subject.getSubjectName() == null
+                                    ? "科目" + subjectId : subject.getSubjectName())
+                            .schools(new ArrayList<>())
+                            .build());
+            compare.getSchools().add(RegionStatResponse.SchoolSubjectAverage.builder()
+                    .schoolId(schoolId)
+                    .averageScore(summarize(values).average())
+                    .build());
+        });
+    }
+
+    /**
+     * ponytail: subject 是按校建的租户表，同一门课在各校 ID 不同；跨校按科目名称对齐（名称为空再退回 subject_code，再退回 ID），
+     * 名称比编码更可能跨校一致（编码各校自拟如 MATH / SX），且前端图表分类轴本来就按名称显示
+     */
+    private static String subjectKey(Subject subject, Long subjectId) {
+        if (subject != null) {
+            if (subject.getSubjectName() != null && !subject.getSubjectName().trim().isEmpty()) {
+                return "name:" + subject.getSubjectName().trim();
+            }
+            if (subject.getSubjectCode() != null && !subject.getSubjectCode().trim().isEmpty()) {
+                return "code:" + subject.getSubjectCode().trim().toUpperCase(Locale.ROOT);
+            }
+        }
+        return "id:" + subjectId;
+    }
+
+    /**
+     * 按均分降序排名；并列同名次（名次 = 均分更高的学校数 + 1），与 calculateRankings 的并列规则一致
+     */
+    private static void assignSchoolRanks(List<RegionStatResponse.SchoolStat> ranked) {
+        Comparator<RegionStatResponse.SchoolStat> byAverageDesc = Comparator.comparing(
+                RegionStatResponse.SchoolStat::getAverageScore, Comparator.<BigDecimal>reverseOrder());
+        ranked.sort(byAverageDesc.thenComparing(RegionStatResponse.SchoolStat::getSchoolId,
+                Comparator.nullsLast(Comparator.<Long>naturalOrder())));
+        for (int i = 0; i < ranked.size(); i++) {
+            RegionStatResponse.SchoolStat current = ranked.get(i);
+            boolean tied = i > 0 && current.getAverageScore().compareTo(ranked.get(i - 1).getAverageScore()) == 0;
+            current.setRank(tied ? ranked.get(i - 1).getRank() : i + 1);
+        }
+    }
+
+    private void assertSuperAdmin(String message) {
+        if (!SecurityUtils.isSuperAdmin()) {
+            throw new BusinessException(ResultCode.FORBIDDEN, message);
+        }
+    }
+
     // ---------------------------------------------------------------- 分数线
 
     /**
@@ -599,6 +846,9 @@ public class StatServiceImpl implements StatService {
      */
     private Map<Long, ScoreLine> subjectLines(Long examId, Set<Long> subjectIds, Map<Long, Subject> subjects) {
         Map<Long, BigDecimal> examFullScores = examFullScores(examId);
+        // ponytail: K1 —— 比例每次统计只读一次，而不是每科都打一次 sys_config
+        BigDecimal passRatio = passRatio();
+        BigDecimal excellentRatio = excellentRatio();
         Map<Long, ScoreLine> lines = new HashMap<>();
         for (Long subjectId : subjectIds) {
             if (subjectId == null) {
@@ -607,24 +857,41 @@ public class StatServiceImpl implements StatService {
             Subject subject = subjects.get(subjectId);
             BigDecimal fullScore = firstPositive(examFullScores.get(subjectId),
                     subject == null ? null : subject.getFullScore());
-            lines.put(subjectId, new ScoreLine(fullScore, passLineOf(subject, fullScore), ratioOf(fullScore, EXCELLENT_RATIO)));
+            lines.put(subjectId, new ScoreLine(fullScore, passLineOf(subject, fullScore, passRatio),
+                    ratioOf(fullScore, excellentRatio)));
         }
         return lines;
+    }
+
+    /**
+     * 及格比例：sys_config score.pass.line / 100，配置服务返回空或非正数时兜底 0.60
+     */
+    private BigDecimal passRatio() {
+        BigDecimal ratio = scoreRuleService.passRatio();
+        return ratio == null || ratio.signum() <= 0 ? DEFAULT_PASS_RATIO : ratio;
+    }
+
+    /**
+     * 优秀比例：sys_config score.excellent.line / 100，配置服务返回空或非正数时兜底 0.85
+     */
+    private BigDecimal excellentRatio() {
+        BigDecimal ratio = scoreRuleService.excellentRatio();
+        return ratio == null || ratio.signum() <= 0 ? DEFAULT_EXCELLENT_RATIO : ratio;
     }
 
     /**
      * 单科及格线。
      * ponytail: subject.pass_score 是相对 subject.full_score 配置的，本场 exam_subject.full_score 不同时按比例折算
      * （passScore × examFull / subjectFull，HALF_UP 2 位）；否则与已按本场满分折算的优秀线口径不一致，极端时满分也「不及格」。
-     * 未配置及格分或科目满分非法时退回满分×60%
+     * 未配置及格分或科目满分非法时退回满分×及格比例（K1，默认 60%）
      */
-    private BigDecimal passLineOf(Subject subject, BigDecimal fullScore) {
+    private BigDecimal passLineOf(Subject subject, BigDecimal fullScore, BigDecimal passRatio) {
         if (subject == null || subject.getPassScore() == null) {
-            return ratioOf(fullScore, PASS_RATIO);
+            return ratioOf(fullScore, passRatio);
         }
         BigDecimal subjectFull = subject.getFullScore();
         if (subjectFull == null || subjectFull.signum() <= 0) {
-            return ratioOf(fullScore, PASS_RATIO);
+            return ratioOf(fullScore, passRatio);
         }
         if (subjectFull.compareTo(fullScore) == 0) {
             return subject.getPassScore();

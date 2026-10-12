@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import type { UserInfo } from '@/stores/user'
+import { featureRoutes } from './modules'
 
 /**
  * 旧会话判定：契约 2 之后登录响应一定带 headTeacher（后端是原始 boolean，non_null 序列化下必出现）；
@@ -197,7 +198,9 @@ const routes: RouteRecordRaw[] = [
         name: 'ConfigManage',
         component: () => import('@/views/system/config.vue'),
         meta: { title: '系统配置', allowedTypes: [1, 2] }
-      }
+      },
+      // 功能模块扩展路由：来自 router/modules/*.routes.ts，见 router/modules/index.ts
+      ...featureRoutes
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' }

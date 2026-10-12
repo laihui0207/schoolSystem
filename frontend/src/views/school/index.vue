@@ -35,6 +35,7 @@
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="schoolName" label="学校名称" min-width="150" />
         <el-table-column prop="schoolCode" label="学校代码" width="120" />
+        <el-table-column prop="regionCode" label="区域编码" width="110" />
         <el-table-column prop="address" label="地址" min-width="200" show-overflow-tooltip />
         <el-table-column prop="contactPerson" label="联系人" width="100" />
         <el-table-column prop="contactPhone" label="联系电话" width="120" />
@@ -89,6 +90,9 @@
         </el-form-item>
         <el-form-item label="学校代码" prop="schoolCode">
           <el-input v-model="form.schoolCode" placeholder="请输入学校代码" />
+        </el-form-item>
+        <el-form-item label="区域编码" prop="regionCode">
+          <el-input v-model="form.regionCode" placeholder="同一区域编码的学校可跨校对比" maxlength="20" />
         </el-form-item>
         <el-form-item label="地址" prop="address">
           <el-input v-model="form.address" placeholder="请输入地址" />
@@ -154,6 +158,7 @@ const defaultForm = (): School => ({
   id: undefined,
   schoolName: '',
   schoolCode: '',
+  regionCode: '',
   address: '',
   contactPhone: '',
   contactPerson: '',
@@ -232,6 +237,7 @@ const normalizeSchoolForm = (source: School): School => {
   const blankToUndefined = (v?: string) => (v && v.trim() ? v.trim() : undefined)
   return {
     ...source,
+    regionCode: blankToUndefined(source.regionCode),
     address: blankToUndefined(source.address),
     contactPhone: blankToUndefined(source.contactPhone),
     contactPerson: blankToUndefined(source.contactPerson)

@@ -2,6 +2,7 @@ package com.school.module.export.controller;
 
 import com.school.common.result.Result;
 import com.school.module.export.service.ExportService;
+import com.school.module.export.service.StatReportExportService;
 import com.school.module.score.dto.BatchInputResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,18 @@ import jakarta.servlet.http.HttpServletResponse;
 public class ExportController {
 
     private final ExportService exportService;
+    private final StatReportExportService statReportExportService;
+
+    /**
+     * 导出统计报表 Excel（概览 / 科目统计 / 分数段 三个 sheet；classId 为空时全校各班并附全校合计）
+     */
+    @GetMapping("/stat-report")
+    public void exportStatReport(
+            @RequestParam Long examId,
+            @RequestParam(required = false) Long classId,
+            HttpServletResponse response) {
+        statReportExportService.exportStatReport(examId, classId, response);
+    }
 
     /**
      * 导出成绩Excel

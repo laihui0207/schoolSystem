@@ -21,6 +21,11 @@ import com.school.module.student.mapper.StudentMapper;
 import com.school.module.grade.mapper.GradeMapper;
 import com.school.module.exam.mapper.ExamMapper;
 import com.school.module.class_module.mapper.ClassMapper;
+import com.school.module.config.service.ScoreRuleService;
+import com.school.module.school.entity.School;
+import com.school.module.school.mapper.SchoolMapper;
+import com.school.module.term.entity.AcademicTerm;
+import com.school.module.term.mapper.AcademicTermMapper;
 import com.school.module.stat.dto.*;
 import com.school.support.TestAuth;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -79,6 +85,17 @@ class StatServiceTest {
     @Mock
     private TeacherScopeService teacherScopeService;
 
+    // ponytail: 区域对比新注入 SchoolMapper / AcademicTermMapper，不加 @Mock 会被注入 null 导致 NPE
+    @Mock
+    private SchoolMapper schoolMapper;
+
+    @Mock
+    private AcademicTermMapper academicTermMapper;
+
+    // ponytail: K1 —— StatServiceImpl 改从 ScoreRuleService 读及格/优秀比例，桩按默认 0.60/0.85 返回
+    @Mock
+    private ScoreRuleService scoreRuleService;
+
     @InjectMocks
     private StatServiceImpl statService;
 
@@ -95,6 +112,10 @@ class StatServiceTest {
     @BeforeEach
     void setUp() {
         TestAuth.asSchoolAdmin(1L);
+
+        // ponytail: K1 —— lenient：并非每个用例都会走到 subjectLines（如学生趋势为空、权限拒绝），严格桩会报 UnnecessaryStubbing
+        lenient().when(scoreRuleService.passRatio()).thenReturn(new BigDecimal("0.60"));
+        lenient().when(scoreRuleService.excellentRatio()).thenReturn(new BigDecimal("0.85"));
 
         // 准备学生1的成绩
         score1 = new Score();
@@ -909,6 +930,157 @@ class StatServiceTest {
         assertThat(personal.getSubjectScores().get(0).getIsAbsent()).isFalse();
         assertThat(classStat.getActualStudents()).isEqualTo(2);
         assertThat(classStat.getAbsentStudents()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("应该按均分给各校排名并取每校最新一场已发布考试_当超管查区域对比")
+    void shouldRankSchoolsByAverage_WhenRegionStat_ThenLatestPublishedExamPerSchool() {
+        // Given: 同区域两所学校，一中有两场已发布考试（取 exam_date 更晚的 102），二中一场
+        TestAuth.asSuperAdmin();
+        when(schoolMapper.selectList(any())).thenReturn(Arrays.asList(school(1L, "一中", "R1"), school(2L, "二中", "R1")));
+        when(academicTermMapper.selectList(any())).thenReturn(Arrays.asList(term(11L, 1L), term(21L, 2L)));
+        when(examMapper.selectList(any())).thenReturn(Arrays.asList(
+                publishedExam(101L, 1L, 11L, LocalDate.of(2024, 11, 1)),
+                publishedExam(102L, 1L, 11L, LocalDate.of(2024, 12, 1)),
+                publishedExam(201L, 2L, 21L, LocalDate.of(2024, 11, 15))));
+        when(scoreMapper.selectByExamId(1L, 102L, null)).thenReturn(Arrays.asList(
+                regionScore(1L, 1L, 102L, 1L, 1L, 90.0),
+                regionScore(2L, 1L, 102L, 2L, 1L, 70.0)));
+        when(scoreMapper.selectByExamId(2L, 201L, null)).thenReturn(Arrays.asList(
+                regionScore(3L, 2L, 201L, 3L, 2L, 95.0),
+                regionScore(4L, 2L, 201L, 4L, 2L, 85.0)));
+        // 两校的「数学」在各自 subject 表里是不同 ID，跨校按名称对齐成一门
+        when(subjectMapper.selectBatchIds(anyCollection()))
+                .thenReturn(Arrays.asList(subject(1L, "数学", 100, 60), subject(2L, "数学", 100, 60)));
+
+        // When
+        RegionStatResponse response = statService.getRegionStat(regionQuery("R1"));
+
+        // Then: 二中均分 90 第 1，一中均分 80 第 2；一中用的是 102 而不是 101
+        assertThat(response.getRegionCode()).isEqualTo("R1");
+        assertThat(response.getSchools()).hasSize(2);
+        RegionStatResponse.SchoolStat first = response.getSchools().get(0);
+        RegionStatResponse.SchoolStat second = response.getSchools().get(1);
+        assertThat(first.getSchoolId()).isEqualTo(2L);
+        assertThat(first.getRank()).isEqualTo(1);
+        assertThat(first.getAverageScore()).isEqualByComparingTo("90.00");
+        assertThat(first.getExcellentRate()).isEqualByComparingTo("100.00");
+        assertThat(second.getSchoolId()).isEqualTo(1L);
+        assertThat(second.getRank()).isEqualTo(2);
+        assertThat(second.getExamId()).isEqualTo(102L);
+        assertThat(second.getStudentCount()).isEqualTo(2);
+        assertThat(second.getAverageScore()).isEqualByComparingTo("80.00");
+        assertThat(second.getPassRate()).isEqualByComparingTo("100.00");
+        assertThat(second.getExcellentRate()).isEqualByComparingTo("50.00");
+        assertThat(response.getSubjects()).hasSize(1);
+        assertThat(response.getSubjects().get(0).getSubjectName()).isEqualTo("数学");
+        assertThat(response.getSubjects().get(0).getSchools()).hasSize(2);
+        verify(scoreMapper).selectByExamId(1L, 102L, null);
+        verify(scoreMapper, never()).selectByExamId(1L, 101L, null);
+    }
+
+    @Test
+    @DisplayName("应该把没有可比考试的学校排在最后且不参与排名_当该校该学期没有已发布考试")
+    void shouldKeepSchoolWithoutExamUnranked_WhenRegionStat_ThenRankNull() {
+        // Given: 二中没有该学年学期的学期记录，也就没有考试
+        TestAuth.asSuperAdmin();
+        when(schoolMapper.selectList(any())).thenReturn(Arrays.asList(school(1L, "一中", "R1"), school(2L, "二中", "R1")));
+        when(academicTermMapper.selectList(any())).thenReturn(Collections.singletonList(term(11L, 1L)));
+        when(examMapper.selectList(any())).thenReturn(Collections.singletonList(
+                publishedExam(101L, 1L, 11L, LocalDate.of(2024, 11, 1))));
+        when(scoreMapper.selectByExamId(1L, 101L, null)).thenReturn(Collections.singletonList(
+                regionScore(1L, 1L, 101L, 1L, 1L, 90.0)));
+        when(subjectMapper.selectBatchIds(anyCollection()))
+                .thenReturn(Collections.singletonList(subject(1L, "数学", 100, 60)));
+
+        // When
+        RegionStatResponse response = statService.getRegionStat(regionQuery("R1"));
+
+        // Then
+        assertThat(response.getSchools()).hasSize(2);
+        assertThat(response.getSchools().get(0).getSchoolId()).isEqualTo(1L);
+        assertThat(response.getSchools().get(0).getRank()).isEqualTo(1);
+        RegionStatResponse.SchoolStat missing = response.getSchools().get(1);
+        assertThat(missing.getSchoolId()).isEqualTo(2L);
+        assertThat(missing.getExamId()).isNull();
+        assertThat(missing.getRank()).isNull();
+        assertThat(missing.getStudentCount()).isZero();
+        verify(scoreMapper, never()).selectByExamId(eq(2L), anyLong(), isNull());
+    }
+
+    @Test
+    @DisplayName("应该拒绝区域对比与区域列表_当不是超级管理员")
+    void shouldForbidRegionStat_WhenNotSuperAdmin_ThenForbidden() {
+        // Given: setUp 默认是校管理员
+        assertForbidden(() -> statService.getRegionStat(regionQuery("R1")));
+        assertForbidden(() -> statService.listRegions());
+        verifyNoInteractions(schoolMapper);
+    }
+
+    @Test
+    @DisplayName("应该返回去重的区域编码及学校数_当超管查区域列表")
+    void shouldListRegions_WhenSchoolsHaveRegionCode_ThenDistinctWithCount() {
+        // Given
+        TestAuth.asSuperAdmin();
+        when(schoolMapper.selectList(any())).thenReturn(Arrays.asList(
+                school(1L, "一中", "R1"), school(2L, "二中", "R1"), school(3L, "三中", "R2")));
+
+        // When
+        List<RegionOptionResponse> regions = statService.listRegions();
+
+        // Then
+        assertThat(regions).extracting(RegionOptionResponse::getRegionCode).containsExactly("R1", "R2");
+        assertThat(regions.get(0).getSchoolCount()).isEqualTo(2);
+        assertThat(regions.get(1).getSchoolCount()).isEqualTo(1);
+    }
+
+    /**
+     * 辅助方法：学校（区域编码，启用）
+     */
+    private School school(Long id, String name, String regionCode) {
+        School school = new School();
+        school.setId(id);
+        school.setSchoolName(name);
+        school.setRegionCode(regionCode);
+        school.setStatus(1);
+        return school;
+    }
+
+    /**
+     * 辅助方法：学期 2024-2025 上学期
+     */
+    private AcademicTerm term(Long id, Long schoolId) {
+        AcademicTerm academicTerm = new AcademicTerm();
+        academicTerm.setId(id);
+        academicTerm.setSchoolId(schoolId);
+        academicTerm.setYear("2024-2025");
+        academicTerm.setTerm(1);
+        return academicTerm;
+    }
+
+    /**
+     * 辅助方法：已发布的期末考试
+     */
+    private Exam publishedExam(Long id, Long schoolId, Long termId, LocalDate examDate) {
+        Exam exam = exam(id, termId, 3);
+        exam.setSchoolId(schoolId);
+        exam.setExamType(3);
+        exam.setExamDate(examDate);
+        return exam;
+    }
+
+    /**
+     * 辅助方法：某校某场考试的成绩行
+     */
+    private Score regionScore(Long id, Long schoolId, Long examId, Long studentId, Long subjectId, Double score) {
+        Score s = createScore(id, examId, studentId, subjectId, score);
+        s.setSchoolId(schoolId);
+        s.setClassId(schoolId * 10);
+        return s;
+    }
+
+    private RegionStatQuery regionQuery(String regionCode) {
+        return RegionStatQuery.builder().regionCode(regionCode).year("2024-2025").term(1).examType(3).build();
     }
 
     /**

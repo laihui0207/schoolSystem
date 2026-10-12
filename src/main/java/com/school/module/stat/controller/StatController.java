@@ -4,12 +4,18 @@ import com.school.common.result.Result;
 import com.school.module.stat.dto.ClassStatResponse;
 import com.school.module.stat.dto.GradeStatResponse;
 import com.school.module.stat.dto.PersonalStatResponse;
+import com.school.module.stat.dto.RegionOptionResponse;
+import com.school.module.stat.dto.RegionStatQuery;
+import com.school.module.stat.dto.RegionStatResponse;
 import com.school.module.stat.dto.StudentTrendResponse;
 import com.school.module.stat.dto.SubjectStatResponse;
 import com.school.module.stat.service.StatService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 成绩统计控制器
@@ -84,6 +90,29 @@ public class StatController {
         // ponytail: 契约 3 —— Service 已实现 getSubjectStat 但此前没有端点暴露，前端科目分析页 404
         SubjectStatResponse response = statService.getSubjectStat(examId, subjectId);
         return Result.success(response);
+    }
+
+    /**
+     * 区域（跨校）成绩对比
+     * <p>
+     * 同一 region_code 下的学校，按 (year, term, examType) 各取 exam_date 最新一场已发布考试，聚合后按均分排名。
+     */
+    // ponytail: 跨校数据只有超管可见——校管/教师的租户上下文只有一所学校，没有「区域」概念；
+    // 查询参数是 GET 对象绑定，@Valid 失败走 BindException → 400
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @GetMapping("/region")
+    public Result<RegionStatResponse> getRegionStat(@Valid RegionStatQuery query) {
+        RegionStatResponse response = statService.getRegionStat(query);
+        return Result.success(response);
+    }
+
+    /**
+     * 已配置区域编码的区域列表（供下拉）
+     */
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @GetMapping("/regions")
+    public Result<List<RegionOptionResponse>> listRegions() {
+        return Result.success(statService.listRegions());
     }
 
 }

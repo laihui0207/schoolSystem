@@ -2,6 +2,7 @@ package com.school.module.score.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.school.common.result.Result;
+import com.school.module.log.annotation.OperationLog;
 import com.school.module.score.dto.*;
 import com.school.module.score.service.ScoreService;
 import jakarta.validation.Valid;
@@ -27,6 +28,7 @@ public class ScoreController {
      * 单个成绩录入
      */
     @PostMapping("/input")
+    @OperationLog(value = "录入成绩", module = "score")
     public Result<ScoreResponse> inputScore(@Valid @RequestBody ScoreInputRequest request) {
         ScoreResponse response = scoreService.inputScore(request);
         return Result.success(response);
@@ -36,6 +38,7 @@ public class ScoreController {
      * 批量成绩录入
      */
     @PostMapping("/batch-input")
+    @OperationLog(value = "批量录入成绩", module = "score")
     public Result<BatchInputResult> batchInputScores(@Valid @RequestBody ScoreBatchInputRequest request) {
         // ponytail: 契约 1——返回逐条失败明细而不是一个数字，前端才能提示具体哪位学生没录进去
         BatchInputResult result = scoreService.batchInputScores(request);
@@ -74,7 +77,9 @@ public class ScoreController {
     /**
      * 审核成绩
      */
+    // ponytail: 7.3 敏感操作全链路审计——审核是改变成绩可见性的关键动作，给出中文描述便于在操作日志页检索
     @PostMapping("/review")
+    @OperationLog(value = "审核成绩", module = "score")
     public Result<Void> reviewScores(@Valid @RequestBody ScoreReviewRequest request) {
         scoreService.reviewScores(request);
         return Result.success();
@@ -86,6 +91,7 @@ public class ScoreController {
     // ponytail: B-5——这是回写全场考试排名的写操作，学生/任课教师不得触发；与 publish 一样只给管理员
     @PostMapping("/calculate-rankings")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SCHOOL_ADMIN')")
+    @OperationLog(value = "重算排名", module = "score")
     public Result<Void> calculateRankings(
             @RequestParam Long examId,
             @RequestParam(required = false) Long subjectId) {
@@ -97,6 +103,7 @@ public class ScoreController {
      * 删除成绩
      */
     @DeleteMapping("/{id}")
+    @OperationLog(value = "删除成绩", module = "score")
     public Result<Void> deleteScore(@PathVariable Long id) {
         scoreService.deleteScore(id);
         return Result.success();

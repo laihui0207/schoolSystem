@@ -6,11 +6,15 @@ import com.school.module.student.dto.StudentCreateRequest;
 import com.school.module.student.dto.StudentQueryRequest;
 import com.school.module.student.dto.StudentResponse;
 import com.school.module.student.dto.StudentUpdateRequest;
+import com.school.module.student.roster.RosterImportResult;
+import com.school.module.student.service.StudentRosterService;
 import com.school.module.student.service.StudentService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +29,40 @@ import java.util.List;
 public class StudentController {
 
     private final StudentService studentService;
+    private final StudentRosterService studentRosterService;
+
+    /**
+     * 下载学生导入模板
+     * <p>
+     * ponytail: 字面路径 /template /export /import 与 /{id} 并存，Spring 优先匹配字面量；
+     * 但 /{id} 是 Long，万一前端拼错路径会被当作类型不匹配返回「该路径可能不存在」
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @GetMapping("/template")
+    public void downloadTemplate(HttpServletResponse response) {
+        studentRosterService.downloadTemplate(response);
+    }
+
+    /**
+     * 批量导入学生（multipart：file 必填；schoolId 超管必填、校管理员可省略）
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @PostMapping("/import")
+    public Result<RosterImportResult> importStudents(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(required = false) Long schoolId) {
+        return Result.success(studentRosterService.importStudents(file, schoolId));
+    }
+
+    /**
+     * 按当前筛选条件导出学生档案（含班级、账号用户名）
+     */
+    // ponytail: 导出列含账号用户名，与导入同为管理员专属；教师/学生按钮不可见、直连也会被拒
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','SCHOOL_ADMIN')")
+    @GetMapping("/export")
+    public void exportStudents(StudentQueryRequest request, HttpServletResponse response) {
+        studentRosterService.exportStudents(request, response);
+    }
 
     /**
      * 创建学生

@@ -39,6 +39,13 @@ public class SchoolCreateRequest implements Serializable {
     private String schoolCode;
 
     /**
+     * 区域编码（同一编码的学校可做跨校对比）
+     */
+    // ponytail: 列为 VARCHAR(20)，只校验长度不限字符集，区域编码口径（行政区划码/自定义）由超管自行约定
+    @Size(max = 20, message = "区域编码长度不能超过20个字符")
+    private String regionCode;
+
+    /**
      * 学校类型
      */
     @Size(max = 20, message = "学校类型长度不能超过20个字符")

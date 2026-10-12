@@ -59,6 +59,19 @@
         <el-table-column prop="totalRankInClass" label="总分班排" width="90" align="center" />
         <el-table-column prop="totalRankInGrade" label="总分年排" width="90" align="center" />
         <el-table-column prop="statusName" label="状态" width="90" align="center" />
+        <!-- ponytail: 成绩单 PDF——学生只对本人行可见，管理员/教师对每行可见；未发布/越权由后端拒绝并提示 -->
+        <el-table-column label="操作" width="120" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="canDownloadPdf(row)"
+              link
+              type="primary"
+              size="small"
+              :loading="pdfLoadingId === row.id"
+              @click="handleScorePdf(row)"
+            >成绩单 PDF</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-pagination
@@ -81,7 +94,7 @@ import { getScoreList, type ScoreResponse } from '@/api/score'
 import { getExamList } from '@/api/exam'
 import { getSubjectList } from '@/api/subject'
 import { getClassList } from '@/api/class'
-import { exportScores } from '@/api/export'
+import { exportScores, downloadScoreReportPdf } from '@/api/export'
 import { getSchoolList } from '@/api/school'
 import { useUserStore } from '@/stores/user'
 
@@ -164,9 +177,30 @@ const handleExport = async () => {
     await exportScores({ examId: query.examId, classId: query.classId })
     ElMessage.success('导出成功')
   } catch {
-    ElMessage.error('导出失败')
+    // 失败提示已由 request 拦截器 / api/export.ts 的 ensureBinary 给出后端原文，这里不再重复弹「导出失败」
   } finally {
     exporting.value = false
+  }
+}
+
+const pdfLoadingId = ref<number | null>(null)
+
+// ponytail: el-table 插槽里的 row 是 DefaultRow（索引签名）而非 ScoreResponse，参数用 Partial 接收并显式判空，避免新增 vue-tsc 错误
+const canDownloadPdf = (row: Partial<ScoreResponse>): boolean => {
+  if (!row.examId || !row.studentId) return false
+  if (isStudent) return row.studentId === userStore.userInfo?.studentId
+  return true
+}
+
+const handleScorePdf = async (row: Partial<ScoreResponse>) => {
+  if (!row.examId || !row.studentId) return
+  pdfLoadingId.value = row.id ?? null
+  try {
+    await downloadScoreReportPdf(row.examId, row.studentId, row.studentNo)
+  } catch {
+    // 后端业务错误（成绩未发布 / 越权）已在 ensureBinary 中提示
+  } finally {
+    pdfLoadingId.value = null
   }
 }
 

@@ -108,6 +108,7 @@ public class SchoolServiceImpl implements SchoolService {
         updatedSchool.setId(existingSchool.getId());
         updatedSchool.setSchoolName(existingSchool.getSchoolName());
         updatedSchool.setSchoolCode(existingSchool.getSchoolCode());
+        updatedSchool.setRegionCode(existingSchool.getRegionCode());
         updatedSchool.setSchoolType(existingSchool.getSchoolType());
         updatedSchool.setProvince(existingSchool.getProvince());
         updatedSchool.setCity(existingSchool.getCity());
@@ -180,6 +181,7 @@ public class SchoolServiceImpl implements SchoolService {
         School school = new School();
         school.setSchoolName(request.getSchoolName());
         school.setSchoolCode(request.getSchoolCode());
+        school.setRegionCode(request.getRegionCode());
         school.setSchoolType(request.getSchoolType());
         school.setProvince(request.getProvince());
         school.setCity(request.getCity());
@@ -198,6 +200,7 @@ public class SchoolServiceImpl implements SchoolService {
         school.setId(existing.getId());
         school.setSchoolName(request.getSchoolName() != null ? request.getSchoolName() : existing.getSchoolName());
         school.setSchoolCode(existing.getSchoolCode()); // 学校编码不允许修改
+        school.setRegionCode(request.getRegionCode() != null ? request.getRegionCode() : existing.getRegionCode());
         school.setSchoolType(request.getSchoolType() != null ? request.getSchoolType() : existing.getSchoolType());
         school.setProvince(request.getProvince() != null ? request.getProvince() : existing.getProvince());
         school.setCity(request.getCity() != null ? request.getCity() : existing.getCity());
@@ -217,6 +220,7 @@ public class SchoolServiceImpl implements SchoolService {
                 .id(school.getId())
                 .schoolName(school.getSchoolName())
                 .schoolCode(school.getSchoolCode())
+                .regionCode(school.getRegionCode())
                 .schoolType(school.getSchoolType())
                 .province(school.getProvince())
                 .city(school.getCity())

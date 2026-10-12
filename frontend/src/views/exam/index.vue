@@ -126,7 +126,7 @@ import { getSchoolList, type School } from '@/api/school'
 import { getAllTerms, termLabel, type Term } from '@/api/term'
 import {
   statusOptions,
-  typeOptions,
+  useExamTypeOptions,
   getStatusType,
   getStatusText,
   getTypeText,
@@ -137,6 +137,9 @@ import { handleError } from '@/utils/errorHandler'
 import type { PageResponse } from '@/types/common'
 
 const router = useRouter()
+
+/** 考试类型筛选：字典 exam_type，失败回落内置表 */
+const { options: typeOptions } = useExamTypeOptions()
 
 const loading = ref(false)
 const tableData = ref<Exam[]>([])

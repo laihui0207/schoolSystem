@@ -103,6 +103,12 @@ export interface ScoreResponse {
   statusName?: string
   recordedAt?: string
   reviewedAt?: string
+  /** 审核人ID（契约 K2，V16 之前审核的历史行为空） */
+  reviewerId?: number
+  /** 审核人姓名（后端批量回填） */
+  reviewerName?: string
+  /** 驳回原因（status=2 时有值，独立于 remark） */
+  rejectReason?: string
   remark?: string
 }
 
@@ -328,11 +334,17 @@ export interface ReviewReject {
  */
 export interface ReviewHistory {
   id: number
+  /** 展示用操作人：有审核人取审核人；历史行退回录入人并带「审核人未记录」标注 */
   operator: string
   operateTime: string
   action: 'approve' | 'reject'
+  /** 驳回原因（兼容字段，与 rejectReason 同值） */
   reason?: string
   remark?: string
+  // ponytail: 契约 K2——显式的审核人与驳回原因
+  reviewerId?: number
+  reviewerName?: string
+  rejectReason?: string
 }
 
 /**

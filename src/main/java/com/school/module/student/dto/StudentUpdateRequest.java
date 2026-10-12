@@ -37,4 +37,10 @@ public class StudentUpdateRequest {
      */
     private Integer status;
 
+    /**
+     * 绑定的登录账号 ID（sys_user.id）；null 不改动，0 解绑。
+     * ponytail: 与 TeacherUpdateRequest.userId 同因——已存在的档案此前无法补绑账号，学生端自查全部失效。
+     */
+    private Long userId;
+
 }

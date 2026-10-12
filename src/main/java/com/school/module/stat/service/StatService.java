@@ -3,8 +3,13 @@ package com.school.module.stat.service;
 import com.school.module.stat.dto.ClassStatResponse;
 import com.school.module.stat.dto.GradeStatResponse;
 import com.school.module.stat.dto.PersonalStatResponse;
+import com.school.module.stat.dto.RegionOptionResponse;
+import com.school.module.stat.dto.RegionStatQuery;
+import com.school.module.stat.dto.RegionStatResponse;
 import com.school.module.stat.dto.StudentTrendResponse;
 import com.school.module.stat.dto.SubjectStatResponse;
+
+import java.util.List;
 
 /**
  * 成绩统计服务接口
@@ -52,5 +57,19 @@ public interface StatService {
     GradeStatResponse getGradeStat(Long examId, Long gradeId);
 
     SubjectStatResponse getSubjectStat(Long examId, Long subjectId);
+
+    /**
+     * 区域（跨校）成绩对比：同一 region_code 下各校在 (year, term, examType) 下最新一场已发布考试的聚合与排名
+     * <p>
+     * 仅超级管理员可调用。
+     */
+    RegionStatResponse getRegionStat(RegionStatQuery query);
+
+    /**
+     * 已配置 region_code 的区域去重列表（含启用学校数），供前端下拉
+     * <p>
+     * 仅超级管理员可调用。
+     */
+    List<RegionOptionResponse> listRegions();
 
 }

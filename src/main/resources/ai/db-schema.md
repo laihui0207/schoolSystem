@@ -13,6 +13,7 @@
 | id | BIGSERIAL PK | |
 | school_code | VARCHAR(50) UNIQUE NOT NULL | 学校编码 |
 | school_name | VARCHAR(100) NOT NULL | 学校名称 |
+| region_code | VARCHAR(20) | 区域编码；同一编码的学校可跨校对比（/stats/region） |
 | address | VARCHAR(255) | 地址 |
 | contact_phone | VARCHAR(20) | 联系电话 |
 | contact_person | VARCHAR(50) | 联系人 |
@@ -190,7 +191,9 @@
 | status | SMALLINT DEFAULT 0 | 0=待审核,1=已通过,2=已驳回 |
 | recorded_at | TIMESTAMP | |
 | reviewed_at | TIMESTAMP | |
-| remark | VARCHAR(500) | |
+| reviewer_id | BIGINT | → sys_user.id（审核人，V16；通过/驳回时写入） |
+| reject_reason | VARCHAR(500) | 驳回原因（V16；status=2 时有值，重新通过时清空） |
+| remark | VARCHAR(500) | 录入人备注（V16 之前驳回原因曾以「【驳回】」前缀暂存于此，历史数据未迁移） |
 
 唯一索引：`(exam_id, student_id, subject_id, deleted)`
 
@@ -232,13 +235,31 @@
 ---
 
 ## sys_dict_type / sys_dict_data — 字典
-`sys_dict_data.dict_type` → `sys_dict_type.dict_type`
+`sys_dict_data.dict_type` → `sys_dict_type.dict_type`；`dict_value` 一律是字符串，`status` 0=正常,1=停用
+已有类型（V7/V17 种子）：`exam_type`(1月考/2期中考试/3期末考试/4模拟考试/5其他，exam.exam_type 的展示名优先取此处)、`score_status`(0待审核/1已通过/2已驳回)、`user_status`(0正常/1停用)、`gender`(1男/2女)、`student_status`(0离校/1在读/2休学)、`relationship`(father父亲/mother母亲/other其他)、`region`(区划代码→名称，示例 440300 深圳市/440100 广州市)
 
 ## sys_config — 系统配置
-关键配置项：`score.warning.threshold`=20，`score.pass.line`=60，`score.excellent.line`=85
+全系统共享（无 school_id）。关键配置项：`score.warning.threshold`=20（成绩下降超过该分值触发预警），`score.pass.line`=60 / `score.excellent.line`=85（百分数，统计模块按 值/100 × 满分 折算及格/优秀线），`score.change.approval`=true（false 时管理员的成绩修改申请免审批直接生效，教师仍需审批），`system.maintenance`=false（true 时仅超管/校管理员可登录）
 
 ## sys_operation_log — 操作日志
-仅追加，无软删除。记录 `user_id, operation, method, params, ip, status, execute_time`。
+仅追加，无软删除、无 school_id。由 `OperationLogAspect` 自动记录所有 Controller 的 POST/PUT/PATCH/DELETE 请求。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| user_id | BIGINT | → sys_user.id；未登录请求（登录失败）为 NULL |
+| username | VARCHAR(50) | 登录接口取请求参数里的 username |
+| operation | VARCHAR(100) | 操作描述，如 `[score] 审核成绩`，未加注解时为 `Controller#method` |
+| method | VARCHAR(200) | `HTTP方法 URI`，如 `POST /api/v1/scores/review` |
+| params | TEXT | 请求参数 JSON，password/token/secret/authorization 字段已打码为 ***，截 2000 |
+| ip | VARCHAR(50) | X-Forwarded-For 优先 |
+| location | VARCHAR(100) | 预留，未填 |
+| status | SMALLINT | 1=成功, 0=失败（含被 @PreAuthorize 拒绝的越权尝试） |
+| error_msg | TEXT | 失败时异常消息，截 500 |
+| execute_time | BIGINT | 耗时毫秒 |
+| created_at | TIMESTAMP | |
+
+校管理员查询时按 `JOIN sys_user u ON u.id = l.user_id AND u.school_id = <本校>` 过滤。
 
 ---
 

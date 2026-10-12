@@ -49,6 +49,20 @@
             :value="cls.id!"
           />
         </el-select>
+        <!-- ponytail: 两个导出都要求考试已发布（后端校验），未选齐考试+班级时禁用 -->
+        <el-button
+          type="success"
+          style="margin-left: 10px"
+          :disabled="!selectedExamId || !selectedClassId"
+          :loading="exportingReport"
+          @click="handleExportReport"
+        >导出统计报表</el-button>
+        <el-button
+          type="primary"
+          :disabled="!selectedExamId || !selectedClassId"
+          :loading="exportingPdf"
+          @click="handleClassPdf"
+        >全班成绩单 PDF</el-button>
       </div>
 
       <!-- 加载状态 -->
@@ -170,6 +184,7 @@ import { getClassStat, type ClassStat } from '@/api/stat'
 import { getExamList, type Exam } from '@/api/exam'
 import { getClassList, type Class } from '@/api/class'
 import { getSchoolList } from '@/api/school'
+import { exportStatReport, downloadClassReportsPdf } from '@/api/export'
 import { handleError } from '@/utils/errorHandler'
 import { useUserStore } from '@/stores/user'
 
@@ -425,6 +440,36 @@ const handleExamChange = () => {
 
 const handleClassChange = () => {
   loadAnalysis()
+}
+
+const exportingReport = ref(false)
+const exportingPdf = ref(false)
+
+const selectedClassName = () =>
+  classList.value.find(cls => cls.id === selectedClassId.value)?.className ?? selectedClassId.value
+
+const handleExportReport = async () => {
+  if (!selectedExamId.value || !selectedClassId.value) return
+  exportingReport.value = true
+  try {
+    await exportStatReport({ examId: selectedExamId.value, classId: selectedClassId.value })
+  } catch {
+    // 后端业务错误（未发布 / 越权）已在 api/export.ts 的 ensureBinary 中提示，HTTP 错误由拦截器提示
+  } finally {
+    exportingReport.value = false
+  }
+}
+
+const handleClassPdf = async () => {
+  if (!selectedExamId.value || !selectedClassId.value) return
+  exportingPdf.value = true
+  try {
+    await downloadClassReportsPdf(selectedExamId.value, selectedClassId.value, selectedClassName())
+  } catch {
+    // 同上
+  } finally {
+    exportingPdf.value = false
+  }
 }
 
 onMounted(async () => {

@@ -159,7 +159,7 @@ import {
   type ExamSaveData,
   type ExamSubject
 } from '@/api/exam'
-import { typeOptions } from './examOptions'
+import { useExamTypeOptions } from './examOptions'
 import { getSchoolList, type School } from '@/api/school'
 import { getAllTerms, termLabel, type Term } from '@/api/term'
 import { getGradesBySchool, type Grade } from '@/api/grade'
@@ -185,6 +185,9 @@ interface GradeOption extends Grade {
 }
 
 const isEdit = computed(() => !!props.editData?.id)
+
+/** 考试类型下拉：字典 exam_type，失败回落内置表 */
+const { options: typeOptions } = useExamTypeOptions()
 
 const activeStep = ref(0)
 const submitLoading = ref(false)
