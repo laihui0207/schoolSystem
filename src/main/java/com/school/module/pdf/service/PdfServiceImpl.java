@@ -54,9 +54,10 @@ public class PdfServiceImpl implements PdfService {
     @Override
     public void generateScoreReport(Long examId, Long studentId, HttpServletResponse response) {
         Exam exam = publishedExam(examId);
-        // ponytail: 学生 IDOR 守卫先于任何查询，与 StatService.assertStudentSelfOnly 一致
-        if (SecurityUtils.isStudent() && !SecurityUtils.currentStudentId().equals(studentId)) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "只能下载本人的成绩单");
+        // ponytail: 学生/家长 IDOR 守卫先于任何查询（契约 L canViewStudent），与 StatService.assertStudentSelfOnly 一致
+        if (!SecurityUtils.canViewStudent(studentId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "只能下载本人的成绩单" : "只能下载已绑定孩子的成绩单");
         }
 
         List<Score> studentRows = scoreMapper.selectByExamId(SecurityUtils.currentSchoolIdForQuery(), examId, null)
@@ -83,8 +84,9 @@ public class PdfServiceImpl implements PdfService {
     @Override
     public void generateClassScoreReports(Long examId, Long classId, HttpServletResponse response) {
         Exam exam = publishedExam(examId);
-        if (SecurityUtils.isStudent()) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "学生账号无权批量下载成绩单");
+        if (SecurityUtils.isStudent() || SecurityUtils.isParent()) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "学生账号无权批量下载成绩单" : "家长账号无权批量下载成绩单");
         }
         if (classId == null) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "班级ID不能为空");

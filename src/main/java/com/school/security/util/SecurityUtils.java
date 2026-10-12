@@ -6,6 +6,8 @@ import com.school.security.model.LoginUser;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.List;
+
 /**
  * 当前登录用户工具
  * <p>
@@ -127,6 +129,44 @@ public final class SecurityUtils {
      */
     public static boolean isStudent() {
         return currentUser().isStudent();
+    }
+
+    /**
+     * 是否家长（只能查询已绑定孩子的成绩）
+     */
+    public static boolean isParent() {
+        return currentUser().isParent();
+    }
+
+    /**
+     * 当前家长绑定的学生ID列表
+     *
+     * @throws BusinessException 未认证，或当前账号不是家长
+     */
+    public static List<Long> currentChildStudentIds() {
+        LoginUser user = currentUser();
+        if (!user.isParent()) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "当前账号不是家长账号");
+        }
+        return user.getChildStudentIds();
+    }
+
+    /**
+     * 当前用户能否查看指定学生的数据（成绩、个人统计、趋势、成绩单）
+     * <p>
+     * ponytail: 契约 L——所有「学生只能看自己」的判定点统一走这里：学生=本人，家长=已绑定孩子之一，
+     * 教师/管理员=放行（班级范围另由 TeacherScopeService 收窄）。studentId 为 null 时学生/家长一律拒绝，
+     * 不能退化成「没传就放行」。
+     */
+    public static boolean canViewStudent(Long studentId) {
+        LoginUser user = currentUser();
+        if (user.isStudent()) {
+            return studentId != null && studentId.equals(user.getStudentId());
+        }
+        if (user.isParent()) {
+            return studentId != null && user.getChildStudentIds().contains(studentId);
+        }
+        return true;
     }
 
     /**

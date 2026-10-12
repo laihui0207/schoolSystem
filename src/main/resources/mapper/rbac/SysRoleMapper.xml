@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.rbac.mapper.SysRoleMapper">
+
+    <!-- 用户已绑定的角色（内置 + 附加）。sys_user_role 没有 deleted 列，只过滤角色自身的逻辑删除 -->
+    <select id="selectByUserId" resultType="com.school.module.user.entity.SysRole">
+        SELECT r.id,
+               r.role_code,
+               r.role_name,
+               r.description,
+               r.school_id,
+               r.is_builtin,
+               r.created_at,
+               r.updated_at,
+               r.deleted
+        FROM sys_role r
+                 INNER JOIN sys_user_role ur ON ur.role_id = r.id
+        WHERE ur.user_id = #{userId}
+          AND r.deleted = 0
+        ORDER BY r.is_builtin DESC, r.id
+    </select>
+
+    <!--
+      ponytail: 删除用户时 sys_user_role 关联保留（UserServiceImpl.deleteUser 注释「便于恢复」），
+      所以这里 JOIN sys_user 只数未删除的用户，否则一个被删用户的历史绑定会永久锁死角色删除。
+    -->
+    <select id="countActiveUsersByRoleId" resultType="long">
+        SELECT COUNT(*)
+        FROM sys_user_role ur
+                 INNER JOIN sys_user u ON u.id = ur.user_id AND u.deleted = 0
+        WHERE ur.role_id = #{roleId}
+    </select>
+
+    <!-- 别名用下划线列名，靠 map-underscore-to-camel-case 映射到 RoleUserCount.roleId/userCount；不走 resultType=map 以免踩 PG 小写折叠 -->
+    <select id="countActiveUsersByRoleIds" resultType="com.school.module.rbac.dto.RoleUserCount">
+        SELECT ur.role_id AS role_id,
+               COUNT(*)   AS user_count
+        FROM sys_user_role ur
+                 INNER JOIN sys_user u ON u.id = ur.user_id AND u.deleted = 0
+        WHERE ur.role_id IN
+        <foreach collection="roleIds" item="rid" open="(" separator="," close=")">
+            #{rid}
+        </foreach>
+        GROUP BY ur.role_id
+    </select>
+
+</mapper>

@@ -75,11 +75,11 @@ public class StatServiceImpl implements StatService {
 
     @Override
     public PersonalStatResponse getPersonalStat(Long examId, Long studentId) {
-        // ponytail: 学生只能查自己的个人统计（IDOR），与 getStudentTrend 的守卫一致
+        // ponytail: 学生只能查自己、家长只能查已绑定孩子的个人统计（IDOR），与 getStudentTrend 的守卫一致
         assertStudentSelfOnly(studentId, "无权查看其他学生的成绩统计");
         Exam exam = examMapper.selectById(examId);
-        // ponytail: 契约 S —— 学生只能看已发布考试（exam.status==3）的成绩；发布前先拒绝，不读成绩
-        if (SecurityUtils.isStudent() && !isPublished(exam)) {
+        // ponytail: 契约 S —— 学生/家长只能看已发布考试（exam.status==3）的成绩；发布前先拒绝，不读成绩
+        if (isRestrictedViewer() && !isPublished(exam)) {
             throw new BusinessException(ResultCode.FORBIDDEN, "该考试成绩尚未发布");
         }
         // 整场考试的成绩一次拉取：既取该生各科成绩，也用于现算总分名次
@@ -161,8 +161,8 @@ public class StatServiceImpl implements StatService {
                 .eq(subjectId != null, Score::getSubjectId, subjectId));
 
         Map<Long, Exam> exams = byId(examMapper, ids(allScores, Score::getExamId), Exam::getId);
-        // ponytail: 契约 S —— 学生只看已发布考试（exam.status==3），与 ScoreMapper.xml / listScores 的 publishedOnly 口径一致
-        if (SecurityUtils.isStudent()) {
+        // ponytail: 契约 S —— 学生/家长只看已发布考试（exam.status==3），与 ScoreMapper.xml / listScores 的 publishedOnly 口径一致
+        if (isRestrictedViewer()) {
             allScores = allScores.stream()
                     .filter(s -> isPublished(exams.get(s.getExamId())))
                     .collect(Collectors.toList());
@@ -1275,18 +1275,26 @@ public class StatServiceImpl implements StatService {
      * 学生账号没有班级/年级/科目维度的聚合统计权限
      */
     private void assertNotStudent() {
-        if (SecurityUtils.isStudent()) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "学生账号无权查看班级、年级或科目统计");
+        if (isRestrictedViewer()) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "学生账号无权查看班级、年级或科目统计" : "家长账号无权查看班级、年级或科目统计");
         }
     }
 
     /**
-     * 学生只能查自己（studentId 必须等于登录学生档案 ID）
+     * 学生只能查自己、家长只能查已绑定的孩子（契约 L：统一走 SecurityUtils.canViewStudent）
      */
     private void assertStudentSelfOnly(Long studentId, String message) {
-        if (SecurityUtils.isStudent() && !SecurityUtils.currentStudentId().equals(studentId)) {
+        if (!SecurityUtils.canViewStudent(studentId)) {
             throw new BusinessException(ResultCode.FORBIDDEN, message);
         }
+    }
+
+    /**
+     * 只能看已发布成绩的角色：学生、家长
+     */
+    private static boolean isRestrictedViewer() {
+        return SecurityUtils.isStudent() || SecurityUtils.isParent();
     }
 
     /**

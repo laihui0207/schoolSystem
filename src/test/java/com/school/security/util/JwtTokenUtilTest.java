@@ -138,6 +138,19 @@ class JwtTokenUtilTest {
     }
 
     @Test
+    @DisplayName("同一用户同一秒内两次签发的刷新令牌必须不同")
+    void shouldIssueDistinctRefreshTokens_WhenSameUserSameSecond() {
+        // Given & When: iat/exp 秒级精度下连续签发
+        String first = jwtTokenUtil.generateRefreshToken(1L, "testuser");
+        String second = jwtTokenUtil.generateRefreshToken(1L, "testuser");
+
+        // Then: 否则第二次登录会把第一次轮换刚作废的 Redis 登记重新激活，旧 refresh token 复活
+        assertNotEquals(first, second);
+        assertTrue(jwtTokenUtil.isRefreshToken(first));
+        assertTrue(jwtTokenUtil.isRefreshToken(second));
+    }
+
+    @Test
     @DisplayName("应该暴露配置的访问令牌有效期")
     void shouldExposeConfiguredExpiration() {
         assertEquals(3600000L, jwtTokenUtil.getExpirationMillis());

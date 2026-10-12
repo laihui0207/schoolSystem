@@ -9,8 +9,23 @@
 
       <!-- 选择区 -->
       <div class="filter-section">
+        <!-- ponytail: 家长端——孩子下拉来自 /parents/me/children，不开放学生搜索；后端 getStudentTrend 按 canViewStudent 复核 -->
         <el-select
-          v-if="!isStudent"
+          v-if="isParent"
+          v-model="selectedStudentId"
+          placeholder="请选择孩子"
+          style="width: 300px; margin-right: 10px"
+          @change="handleStudentChange"
+        >
+          <el-option
+            v-for="child in children"
+            :key="child.studentId"
+            :label="`${child.studentNo ?? ''} - ${child.name ?? ''}`"
+            :value="child.studentId"
+          />
+        </el-select>
+        <el-select
+          v-if="!isStudent && !isParent"
           v-model="selectedStudentId"
           placeholder="请输入学号或姓名搜索学生"
           style="width: 300px; margin-right: 10px"
@@ -155,6 +170,8 @@ import { getStudentList, type Student } from '@/api/student'
 import { getTermList, termLabel, type Term } from '@/api/term'
 import { handleError } from '@/utils/errorHandler'
 import { useUserStore } from '@/stores/user'
+import { useRoute } from 'vue-router'
+import { getMyChildren, type ChildBrief } from '@/api/parent'
 
 interface SubjectTrendItem {
   subjectName: string
@@ -191,9 +208,14 @@ const termList = ref<Term[]>([])
 const userStore = useUserStore()
 // ponytail: userType 4 = STUDENT，与后端 UserRole.STUDENT 一致
 const isStudent = computed(() => userStore.userInfo?.userType === 4)
+// ponytail: userType 5 = PARENT，与后端 UserRole.PARENT 一致；孩子列表实时取自 /parents/me/children
+const isParent = computed(() => userStore.userInfo?.userType === 5)
+const children = ref<ChildBrief[]>([])
+const route = useRoute()
 // ponytail: 契约 2 — 学生账号可能尚未关联学生档案（studentId 为 null），此时给出明确提示而不是一直「加载中」
 const noStudentProfile = ref(false)
 const emptyText = computed(() => {
+  if (isParent.value) return children.value.length ? '请选择孩子查看成绩趋势' : '当前账号尚未绑定孩子，请联系学校管理员'
   if (!isStudent.value) return '请选择学生查看成绩趋势'
   return noStudentProfile.value ? '当前账号未关联学生档案' : '加载中...'
 })
@@ -308,6 +330,21 @@ const loadTrend = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// ponytail: 家长默认选中路由 query.studentId 对应的孩子（来自「我的孩子」页跳转），否则选第一个
+const loadChildrenAndTrend = async () => {
+  try {
+    children.value = await getMyChildren()
+  } catch (error) {
+    handleError(error, '加载孩子列表失败')
+    return
+  }
+  const fromRoute = Number(route.query.studentId)
+  const preferred = children.value.find(c => c.studentId === fromRoute) ?? children.value[0]
+  if (!preferred) return
+  selectedStudentId.value = preferred.studentId
+  await loadTrend()
 }
 
 const initTotalChart = () => {
@@ -545,6 +582,10 @@ const handleTermChange = () => {
 onMounted(() => {
   loadTermList()
   window.addEventListener('resize', handleResize)
+  if (isParent.value) {
+    void loadChildrenAndTrend()
+    return
+  }
   // 学生角色直接加载自身趋势，无需搜索
   // ponytail: 契约 2 — 用 userInfo.studentId（学生档案 id）而非 userInfo.id（用户 id）；未关联档案时提示而不发请求
   if (isStudent.value) {

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.school.common.constant.CommonConstants;
 import com.school.common.exception.BusinessException;
 import com.school.common.result.ResultCode;
+import com.school.module.parent.mapper.ParentStudentMapper;
 import com.school.module.teacher.mapper.TeacherClassMapper;
 import com.school.module.user.entity.SysUser;
 import com.school.module.user.enums.UserRole;
@@ -31,6 +32,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     private final SysUserMapper userMapper;
     private final TeacherClassMapper teacherClassMapper;
+    private final ParentStudentMapper parentStudentMapper;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -73,6 +75,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 ? userMapper.selectStudentIdByUserId(user.getId())
                 : null;
 
+        // ponytail: 契约 L——家长账号装载已绑定孩子的 student.id；JwtAuthenticationFilter 每次请求都重新 load，
+        // 管理员绑定/解绑后无需重新登录即生效
+        List<Long> childStudentIds = UserRole.PARENT.getUserType().equals(user.getUserType())
+                ? parentStudentMapper.selectStudentIdsByParentUserId(user.getId())
+                : List.of();
+
         return LoginUser.builder()
                 .userId(user.getId())
                 .username(user.getUsername())
@@ -82,6 +90,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .teacherId(teacherId)
                 .studentId(studentId)
                 .headTeacher(headTeacher)
+                .childStudentIds(childStudentIds)
                 .authorities(authorities)
                 .build();
     }

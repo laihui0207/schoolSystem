@@ -259,7 +259,8 @@ public class UserServiceImpl implements UserService {
      * 非超级管理员角色必须有学校归属
      * <p>
      * ponytail: school_id 为空的 admin/teacher/student 登录后任何租户表查询都会在
-     * SecurityUtils.currentSchoolId() 抛 FORBIDDEN，是个登录即不可用的死账号；只有超管可建平台级账号
+     * SecurityUtils.currentSchoolId() 抛 FORBIDDEN，是个登录即不可用的死账号；只有超管可建平台级账号。
+     * 家长（parent）同样必须有学校归属：绑定孩子时按同校校验，租户插件也靠它收窄 student 查询
      */
     private void requireSchoolForRole(UserRole role, Long schoolId) {
         if (role != UserRole.SUPER_ADMIN && schoolId == null) {

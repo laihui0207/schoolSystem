@@ -42,3 +42,11 @@ docker/data/
 
 # ===== Planning docs =====
 *-plan.md
+
+# ===== Mobile (uni-app) =====
+mobile/node_modules/
+mobile/dist/
+mobile/unpackage/
+
+# ===== Backups (app.backup.dir) =====
+backups/

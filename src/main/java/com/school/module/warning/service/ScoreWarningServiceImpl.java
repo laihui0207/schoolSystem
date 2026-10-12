@@ -12,6 +12,7 @@ import com.school.module.notification.dto.NotificationCreateRequest;
 import com.school.module.notification.entity.Notification;
 import com.school.module.notification.mapper.NotificationMapper;
 import com.school.module.notification.service.NotificationService;
+import com.school.module.parent.service.ParentService;
 import com.school.module.score.entity.Score;
 import com.school.module.score.mapper.ScoreMapper;
 import com.school.module.student.entity.Student;
@@ -33,7 +34,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,6 +64,7 @@ public class ScoreWarningServiceImpl implements ScoreWarningService {
     private final ConfigService configService;
     private final ExamSubjectMapper examSubjectMapper;
     private final NotificationMapper notificationMapper;
+    private final ParentService parentService;
 
     /** 系统配置键：成绩下降预警阈值（分） */
     private static final String KEY_DROP_THRESHOLD = "score.warning.threshold";
@@ -142,24 +146,28 @@ public class ScoreWarningServiceImpl implements ScoreWarningService {
             return;
         }
 
-        // 发送预警通知：收件人是 sys_user.id，需经 student.user_id 换算
+        // 发送预警通知：收件人是 sys_user.id，需经 student.user_id 换算；parent_student 绑定的家长账号同收
         Map<Long, Long> userIdByStudentId = userIdsByStudentIds(warningDetails.keySet());
-        // ponytail: 同一考试重复触发（发布后管理员再手动点一次）不能让学生再收一遍相同通知
-        Set<Long> alreadyWarned = warnedUserIds(exam.getId());
+        Map<Long, List<Long>> parentUserIdsByStudentId = parentService.parentUserIdsByStudentIds(warningDetails.keySet());
+        // ponytail: 同一考试重复触发（发布后管理员再手动点一次）不能让学生/家长再收一遍相同通知；
+        // 本轮已发的也记入集合——同一家长在同场考试只收一条（多个孩子同场预警时以首个为准）
+        Set<Long> alreadyWarned = new HashSet<>(warnedUserIds(exam.getId()));
         int sent = 0;
         int skipped = 0;
         for (Map.Entry<Long, List<String>> entry : warningDetails.entrySet()) {
-            Long userId = userIdByStudentId.get(entry.getKey());
-            if (userId == null) {
-                log.warn("学生 {} 未绑定登录账号，跳过预警通知", entry.getKey());
+            List<Long> recipients = recipientUserIds(entry.getKey(), userIdByStudentId, parentUserIdsByStudentId);
+            if (recipients.isEmpty()) {
+                log.warn("学生 {} 未绑定登录账号也无家长账号，跳过预警通知", entry.getKey());
                 continue;
             }
-            if (alreadyWarned.contains(userId)) {
-                skipped++;
-                continue;
+            for (Long userId : recipients) {
+                if (!alreadyWarned.add(userId)) {
+                    skipped++;
+                    continue;
+                }
+                sendWarning(exam, userId, entry.getValue());
+                sent++;
             }
-            sendWarning(exam, userId, entry.getValue());
-            sent++;
         }
         log.info("考试 {} 预警检查完成：预警学生 {} 人，已发通知 {} 条，已发过跳过 {} 条",
                 examId, warningDetails.size(), sent, skipped);
@@ -192,19 +200,22 @@ public class ScoreWarningServiceImpl implements ScoreWarningService {
             return;
         }
 
-        Long userId = userIdsByStudentIds(List.of(studentId)).get(studentId);
-        if (userId == null) {
-            log.warn("学生 {} 未绑定登录账号，跳过预警通知", studentId);
+        List<Long> recipients = recipientUserIds(studentId,
+                userIdsByStudentIds(List.of(studentId)),
+                parentService.parentUserIdsByStudentIds(List.of(studentId)));
+        if (recipients.isEmpty()) {
+            log.warn("学生 {} 未绑定登录账号也无家长账号，跳过预警通知", studentId);
             return;
         }
-        sendWarning(exam, userId, List.of(detail));
+        recipients.forEach(userId -> sendWarning(exam, userId, List.of(detail)));
     }
 
     @Override
     public Map<String, Object> analyzeScoreTrend(Long studentId, Long subjectId) {
-        // ponytail: studentId 来自路径参数，学生不比对 currentStudentId 就能遍历全校同学的成绩
-        if (SecurityUtils.isStudent() && !Objects.equals(studentId, SecurityUtils.currentStudentId())) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "学生只能查询本人的成绩趋势");
+        // ponytail: studentId 来自路径参数，学生/家长不经 canViewStudent 比对就能遍历全校同学的成绩（契约 L）
+        if (!SecurityUtils.canViewStudent(studentId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "学生只能查询本人的成绩趋势" : "家长只能查询已绑定孩子的成绩趋势");
         }
 
         List<Score> scores = scoreMapper.selectList(new LambdaQueryWrapper<Score>()
@@ -212,8 +223,8 @@ public class ScoreWarningServiceImpl implements ScoreWarningService {
                 .eq(subjectId != null, Score::getSubjectId, subjectId));
         List<Score> validScores = scores.stream().filter(this::isValidScore).collect(Collectors.toList());
 
-        // 学生只看已发布的考试，教师/管理员可看全部
-        boolean publishedOnly = SecurityUtils.isStudent();
+        // 学生/家长只看已发布的考试，教师/管理员可看全部
+        boolean publishedOnly = SecurityUtils.isStudent() || SecurityUtils.isParent();
         Map<Long, Exam> exams = examsByIds(
                 validScores.stream().map(Score::getExamId).collect(Collectors.toSet()), publishedOnly);
 
@@ -516,6 +527,21 @@ public class ScoreWarningServiceImpl implements ScoreWarningService {
         return studentMapper.selectBatchIds(studentIds).stream()
                 .filter(student -> student.getUserId() != null)
                 .collect(Collectors.toMap(Student::getId, Student::getUserId, (a, b) -> a));
+    }
+
+    /**
+     * 某学生的预警收件人：学生本人账号在前，其后是 parent_student 绑定的家长账号，去重
+     */
+    private List<Long> recipientUserIds(Long studentId, Map<Long, Long> userIdByStudentId,
+                                        Map<Long, List<Long>> parentUserIdsByStudentId) {
+        // ponytail: 计划 1.3 家长接收成绩通知——家长与学生收同一条预警；LinkedHashSet 去重并保持学生在前
+        Set<Long> recipients = new LinkedHashSet<>();
+        Long studentUserId = userIdByStudentId.get(studentId);
+        if (studentUserId != null) {
+            recipients.add(studentUserId);
+        }
+        recipients.addAll(parentUserIdsByStudentId.getOrDefault(studentId, Collections.emptyList()));
+        return new ArrayList<>(recipients);
     }
 
     /**

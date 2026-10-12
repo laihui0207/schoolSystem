@@ -187,3 +187,33 @@ app:
     fallback-font: STSong-Light
     fallback-encoding: UniGB-UCS2-H
 
+  # 数据备份配置（BackupProperties）。数据源 host/port/db/user/password 直接取 spring.datasource.*，不重复配置
+  backup:
+    dir: ./backups                 # 备份文件目录（相对进程工作目录）
+    keep-count: 30                 # 只保留最近 N 份成功备份，多余的删文件 + 删记录
+    mode: auto                     # auto（依次探测 pg_dump → docker → sql）| pg_dump | docker | sql
+    docker-container: school-postgres   # docker 模式：docker exec <容器> pg_dump
+    pg-dump-path: pg_dump          # pg_dump 可执行文件（不在 PATH 上时填绝对路径）
+    process-timeout-seconds: 1800  # pg_dump / docker exec 最长运行时间
+
+  # 短信验证码：provider=log 只打日志并写 Redis（sms:last:<phone>），开发/测试用；
+  # provider=aliyun 必须配置 aliyun.access-key-id / access-key-secret / sign-name，缺一启动即失败（SDK 尚未接入）
+  sms:
+    provider: ${SMS_PROVIDER:log}
+    code-expire: 300           # 验证码有效期（秒）
+    send-interval: 60          # 同一手机号重发间隔（秒）
+    daily-limit: 10            # 同一手机号每日发送上限
+    ip-daily-limit: 50         # 同一来源 IP 每日发送上限，0 表示不限
+    max-verify-failures: 5     # 连续错误达到该次数验证码作废
+    register-enabled: true     # 学生/家长自助注册开关
+    aliyun:
+      access-key-id: ${SMS_ALIYUN_ACCESS_KEY_ID:}
+      access-key-secret: ${SMS_ALIYUN_ACCESS_KEY_SECRET:}
+      sign-name: ${SMS_ALIYUN_SIGN_NAME:}
+      region: cn-hangzhou
+      # 场景 -> 模板编码，缺省用 SMS_<SCENE> 占位
+      # template-codes:
+      #   login: SMS_000000001
+      #   register: SMS_000000002
+      #   reset: SMS_000000003
+

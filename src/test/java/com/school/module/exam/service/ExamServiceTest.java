@@ -12,6 +12,7 @@ import com.school.module.exam.mapper.ExamSubjectMapper;
 import com.school.module.grade.entity.Grade;
 import com.school.module.grade.mapper.GradeMapper;
 import com.school.module.notification.service.NotificationService;
+import com.school.module.parent.service.ParentService;
 import com.school.module.school.entity.School;
 import com.school.module.school.mapper.SchoolMapper;
 import com.school.module.score.entity.Score;
@@ -91,6 +92,10 @@ class ExamServiceTest {
     // ponytail: getExamTypeName 改为优先读 exam_type 字典；未 stub 时 Mockito 返回空列表，自然走内置表回落
     @Mock
     private DictService dictService;
+
+    // ponytail: notifyStudentsOfPublish 经 ParentService 扩散到家长；未 stub 时 Mockito 返回空列表，不影响既有断言
+    @Mock
+    private ParentService parentService;
 
     @InjectMocks
     private ExamServiceImpl examService;
@@ -657,6 +662,26 @@ class ExamServiceTest {
         verify(scoreService).calculateAllRankings(1L);
         verify(scoreService, never()).calculateRankings(anyLong(), any());
         verify(notificationService).sendScorePublishNotification(1L, List.of(1001L));
+        verify(scoreWarningService).checkScoreWarnings(1L);
+    }
+
+    @Test
+    @DisplayName("应该同时通知家长_当发布成绩且学生已绑定家长时")
+    void shouldNotifyParentsToo_WhenPublishExam_ThenFanOutToBoundParents() {
+        // Given - 学生 10 的账号 1001、家长 2001；学生 11 未开通账号但有家长 2002；2001 同时也是某学生账号（去重）
+        mockExam.setStatus(2);
+        when(examMapper.selectById(1L)).thenReturn(mockExam);
+        when(examMapper.updateById(any(Exam.class))).thenReturn(1);
+        when(scoreMapper.selectByExamId(1L, 1L, null)).thenReturn(List.of(score(10L, 1), score(11L, 1)));
+        when(studentMapper.selectBatchIds(anyCollection()))
+                .thenReturn(List.of(student(10L, 1001L), student(11L, null)));
+        when(parentService.parentUserIdsOf(anyCollection())).thenReturn(List.of(2001L, 2002L, 1001L));
+
+        // When
+        examService.publishExam(1L);
+
+        // Then: 学生在前、家长在后，重复的 1001 只出现一次
+        verify(notificationService).sendScorePublishNotification(1L, List.of(1001L, 2001L, 2002L));
         verify(scoreWarningService).checkScoreWarnings(1L);
     }
 

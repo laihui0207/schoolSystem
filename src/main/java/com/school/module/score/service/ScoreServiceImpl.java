@@ -235,10 +235,12 @@ public class ScoreServiceImpl implements ScoreService {
         if (score == null) {
             throw new BusinessException("成绩不存在");
         }
-        // ponytail: B-6——学生只能看自己且已发布考试的成绩、教师限任教/班主任范围，否则递增 id 就能读到他人/未发布成绩
-        if (SecurityUtils.isStudent()) {
-            if (!SecurityUtils.currentStudentId().equals(score.getStudentId())) {
-                throw new BusinessException(ResultCode.FORBIDDEN, "学生只能查询自己的成绩");
+        // ponytail: B-6——学生只能看自己、家长只能看已绑定孩子（契约 L canViewStudent），且都只看已发布考试的成绩；
+        // 教师限任教/班主任范围，否则递增 id 就能读到他人/未发布成绩
+        if (SecurityUtils.isStudent() || SecurityUtils.isParent()) {
+            if (!SecurityUtils.canViewStudent(score.getStudentId())) {
+                throw new BusinessException(ResultCode.FORBIDDEN,
+                        SecurityUtils.isStudent() ? "学生只能查询自己的成绩" : "家长只能查询已绑定孩子的成绩");
             }
             Exam exam = examMapper.selectById(score.getExamId());
             if (exam == null || exam.getStatus() == null || exam.getStatus() != EXAM_STATUS_PUBLISHED) {
@@ -258,6 +260,15 @@ public class ScoreServiceImpl implements ScoreService {
         if (SecurityUtils.isStudent()) {
             // ponytail: score.student_id 是 student.id 而非 sys_user.id，之前用 currentUserId() 混用了 ID 域
             request.setStudentId(SecurityUtils.currentStudentId());
+            request.setPublishedOnly(Boolean.TRUE);
+        } else if (SecurityUtils.isParent()) {
+            // ponytail: 契约 L——家长必须指定孩子（studentId ∈ childStudentIds），且与学生一样只看已发布考试
+            if (request.getStudentId() == null) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "家长查询成绩需指定孩子");
+            }
+            if (!SecurityUtils.canViewStudent(request.getStudentId())) {
+                throw new BusinessException(ResultCode.FORBIDDEN, "家长只能查询已绑定孩子的成绩");
+            }
             request.setPublishedOnly(Boolean.TRUE);
         } else {
             // ponytail: publishedOnly 不接受客户端传入，非学生身份一律清掉
@@ -325,15 +336,16 @@ public class ScoreServiceImpl implements ScoreService {
 
     @Override
     public List<ScoreResponse> getStudentExamScores(Long examId, Long studentId) {
-        boolean isStudent = SecurityUtils.isStudent();
-        // ponytail: 学生只能查自己（student.id 域）且只能看已发布考试
-        if (isStudent && !SecurityUtils.currentStudentId().equals(studentId)) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "学生只能查询自己的成绩");
+        boolean restrictedViewer = SecurityUtils.isStudent() || SecurityUtils.isParent();
+        // ponytail: 契约 L——学生只能查自己、家长只能查已绑定孩子（student.id 域），且都只看已发布考试
+        if (!SecurityUtils.canViewStudent(studentId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "学生只能查询自己的成绩" : "家长只能查询已绑定孩子的成绩");
         }
         ScoreQueryRequest request = ScoreQueryRequest.builder()
                 .examId(examId)
                 .studentId(studentId)
-                .publishedOnly(isStudent ? Boolean.TRUE : null)
+                .publishedOnly(restrictedViewer ? Boolean.TRUE : null)
                 .build();
 
         Page<Score> page = new Page<>(1, 100);
@@ -1194,8 +1206,10 @@ public class ScoreServiceImpl implements ScoreService {
      * @param subjectId 可选，为 null 时仅校验班级维度（班主任全科可见）
      */
     private void checkTeacherScope(Long classId, Long subjectId) {
-        if (SecurityUtils.isStudent()) {
-            throw new BusinessException(ResultCode.FORBIDDEN, "学生账号无权执行此操作");
+        // ponytail: 家长与学生一样没有班级粒度的查询权限，否则 class-list / statistics 等入口会把全班成绩放给家长
+        if (SecurityUtils.isStudent() || SecurityUtils.isParent()) {
+            throw new BusinessException(ResultCode.FORBIDDEN,
+                    SecurityUtils.isStudent() ? "学生账号无权执行此操作" : "家长账号无权执行此操作");
         }
         if (!SecurityUtils.isTeacher()) return;
         if (classId == null) {

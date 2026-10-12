@@ -37,6 +37,9 @@
 | user_type | SMALLINT NOT NULL | 1=超管,2=校管理员,3=教师,4=学生,5=家长 |
 | school_id | BIGINT | → school.id |
 | status | SMALLINT DEFAULT 1 | 0=禁用,1=启用 |
+| phone_verified | SMALLINT DEFAULT 0 | 手机号已验证（V22）：短信注册/短信登录成功置 1，管理员录入的手机号为 0 |
+
+自助注册（学生/家长）的账号 `username = phone`。
 
 ---
 
@@ -45,18 +48,23 @@
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | BIGSERIAL PK | |
-| role_code | VARCHAR(50) UNIQUE NOT NULL | e.g. ROLE_TEACHER |
+| role_code | VARCHAR(50) UNIQUE NOT NULL | e.g. ROLE_TEACHER；ROLE_ 前缀保留给内置角色 |
 | role_name | VARCHAR(50) NOT NULL | |
-| school_id | BIGINT | NULL=平台级角色 |
+| description | VARCHAR(200) | |
+| school_id | BIGINT | NULL=平台级角色；校管理员自建角色落本校 |
+| is_builtin | SMALLINT DEFAULT 0 | V19：1=内置（ROLE_SUPER_ADMIN/SCHOOL_ADMIN/TEACHER/STUDENT/PARENT），不可删、role_code 不可改 |
 
 ## sys_user_role — 用户角色关联
-`(user_id, role_id)` UNIQUE
+`(user_id, role_id)` UNIQUE。无 deleted 列。user_type 对应的内置角色始终绑定；其余为「附加角色」（PUT /users/{id}/roles），只能是自定义角色。
 
 ## sys_permission — 权限
-`permission_code` UNIQUE，`resource_type`: 1=菜单,2=按钮,3=API
+`permission_code` UNIQUE，`resource_type`: 1=菜单,2=按钮,3=API；`parent_id` 组成树（NULL=一级菜单），`url` 为后端路径，`sort_order` 同级排序。
+V5 预置 23 条，V19 补齐到约 118 条：一级菜单 `<module>:manage`（sys/school/term/grade/class/subject/student/teacher/exam/score/stat/export/notification/warning），
+系统管理下再分 `sys:user/role/permission/dict/config/log/job/backup` 二级，叶子形如 `term:list`、`score:review`、`score:change-approve`、`stat:region`、`export:pdf`、`sys:user:assign-role`。
+permission_code 原样进入 Spring Security authorities，`@PreAuthorize("@perm.has('sys:role:edit')")` 按它判定（超管恒 true）。
 
 ## sys_role_permission — 角色权限关联
-`(role_id, permission_id)` UNIQUE
+`(role_id, permission_id)` UNIQUE。无 deleted 列，物理删除。V19 按角色默认分配：超管全部；校管理员本校业务 + sys:role:*；教师录入/查询/统计/导出；学生/家长只读自身。
 
 ---
 
@@ -230,7 +238,7 @@
 ---
 
 ## parent_student — 家长学生关联
-`(parent_user_id, student_id)` UNIQUE，`relationship` 如"父亲/母亲/监护人"
+`parent_user_id` → `sys_user.id`（user_type=5 的家长账号），`student_id` → `student.id`；`relationship` 取字典 `relationship` 的 dict_value（father/mother/other）。V18 起有 `deleted`（0/1 软删，查询须加 `deleted = 0`）与 `updated_at`；唯一键 `(parent_user_id, student_id)` 仅对 `deleted = 0` 生效；索引 `idx_parent_student_parent(parent_user_id)`、`idx_parent_student_student(student_id)`。表无 school_id，同校约束在绑定时校验（家长 `sys_user.school_id` = `student.school_id`）。家长登录后 `childStudentIds` 由此表装载，只能查看这些学生的成绩/统计/成绩单，并与学生同收成绩发布与预警通知。
 
 ---
 
@@ -260,6 +268,60 @@
 | created_at | TIMESTAMP | |
 
 校管理员查询时按 `JOIN sys_user u ON u.id = l.user_id AND u.school_id = <本校>` 过滤。
+
+## sys_job — 定时任务定义
+无 school_id（任务以系统身份跨校执行），仅超管可管理（`/jobs`）。启动时 `JobScheduler` 加载 `status=1` 的行，用 Spring TaskScheduler + CronTrigger 注册（不用 Quartz）。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| job_name | VARCHAR(100) | 任务名称 |
+| job_code | VARCHAR(50) | 任务编码，`WHERE deleted=0` 范围内唯一（部分唯一索引），调度器以它为 key |
+| handler_bean | VARCHAR(100) | 执行器 Spring Bean 名，须实现 `com.school.module.job.spi.JobHandler` |
+| cron | VARCHAR(50) | Spring 6 位 cron：秒 分 时 日 月 周，如 `0 0 3 * * ?` |
+| params | TEXT | 传给 handler 的 JSON 对象，如 `{"retainDays":90}` |
+| status | SMALLINT | 0=停用, 1=启用 |
+| last_run_at | TIMESTAMP | 最近一次执行结束时间 |
+| last_run_status | SMALLINT | 最近一次结果：1=成功, 0=失败 |
+| next_run_at | TIMESTAMP | 按 cron 算出的下次触发时间，停用时为 NULL |
+| remark | VARCHAR(500) | |
+| created_at / updated_at / deleted | | 软删除 |
+
+预置（V20，均停用）：`cleanOperationLogs`→`cleanOperationLogsHandler`（每天 03:00，`{"retainDays":90}`，物理删除 N 天前的 sys_operation_log）、`scoreWarningScan`→`scoreWarningScanHandler`（每天 06:00，`{"days":7}`，对近 N 天已发布考试补发成绩预警，已发过不重发）、`backupDatabase`→`backupJobHandler`（每天 02:00，由备份模块提供，缺失时记失败日志）。
+
+## sys_job_log — 定时任务执行日志
+只追加，无软删除、无 school_id。每次执行（cron 触发或手动「立即执行」）一行。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| job_id | BIGINT | → sys_job.id |
+| job_code | VARCHAR(50) | 冗余任务编码，任务删除后仍可读 |
+| started_at | TIMESTAMP | |
+| finished_at | TIMESTAMP | 执行中为 NULL |
+| status | SMALLINT | 1=成功, 0=失败, 2=执行中（手动触发先插行再异步跑，接口据此返回 jobLogId） |
+| message | TEXT | handler 返回的摘要或异常消息，截 2000 |
+| duration_ms | BIGINT | 耗时毫秒 |
+| triggered_by | VARCHAR(50) | `cron` 表示调度触发，否则为手动触发者用户名 |
+
+## sys_backup — 数据备份记录
+无 school_id，仅超级管理员可见（`/backups`）。文件落在 `app.backup.dir`，表里只存元数据。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | BIGSERIAL PK | |
+| file_name | VARCHAR(255) NOT NULL | `.dump` = pg_dump -Fc 产物（需 pg_restore）；`.sql.gz` = 本应用 JDBC 生成，可在线恢复 |
+| file_path | VARCHAR(500) | 文件绝对路径 |
+| file_size | BIGINT | 字节数 |
+| backup_type | SMALLINT | 1=手动（含上传导入、恢复前自动备份），2=定时任务 |
+| backup_mode | VARCHAR(20) | 实际策略：pg_dump / docker / sql / upload |
+| status | SMALLINT | 0=进行中, 1=成功, 2=失败 |
+| message | TEXT | 失败原因或备注（「恢复前自动备份」「上传导入：原文件名」、行数摘要） |
+| triggered_by | VARCHAR(50) | 用户名；定时任务为 `job` |
+| started_at / finished_at | TIMESTAMP | |
+| created_at / updated_at / deleted | | 软删除 |
+
+在线恢复只 TRUNCATE 并重装「备份文件里有 ∩ 当前库里有」的表，永远排除 flyway_schema_history、sys_backup、sys_operation_log。
 
 ---
 

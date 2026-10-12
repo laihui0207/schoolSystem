@@ -17,6 +17,7 @@ import com.school.module.exam.mapper.ExamSubjectMapper;
 import com.school.module.grade.entity.Grade;
 import com.school.module.grade.mapper.GradeMapper;
 import com.school.module.notification.service.NotificationService;
+import com.school.module.parent.service.ParentService;
 import com.school.module.school.entity.School;
 import com.school.module.school.mapper.SchoolMapper;
 import com.school.module.score.entity.Score;
@@ -43,6 +44,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,6 +73,7 @@ public class ExamServiceImpl implements ExamService {
     private final ScoreService scoreService;
     private final NotificationService notificationService;
     private final ScoreWarningService scoreWarningService;
+    private final ParentService parentService;
     private final DictService dictService;
 
     /** 考试类型字典编码（sys_dict_type.dict_type，V7 种子） */
@@ -456,10 +459,13 @@ public class ExamServiceImpl implements ExamService {
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
-        if (userIds.isEmpty()) {
+        // ponytail: 计划 1.3 家长接收成绩通知——parent_student 绑定的家长账号与学生同收一条；LinkedHashSet 去重且学生在前
+        Set<Long> recipients = new LinkedHashSet<>(userIds);
+        recipients.addAll(parentService.parentUserIdsOf(studentIds));
+        if (recipients.isEmpty()) {
             return;
         }
-        notificationService.sendScorePublishNotification(examId, userIds);
+        notificationService.sendScorePublishNotification(examId, new ArrayList<>(recipients));
     }
 
     /**

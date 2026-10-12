@@ -23,7 +23,7 @@ public enum UserRole {
     TEACHER("teacher", 3, "ROLE_TEACHER"),
     /** 学生：只能查询自身成绩 */
     STUDENT("student", 4, "ROLE_STUDENT"),
-    /** 家长：暂未实现 */
+    /** 家长：只能查看 parent_student 里绑定孩子的成绩/统计/成绩单，并与学生同收成绩发布与预警通知；必须有学校归属 */
     PARENT("parent", 5, "ROLE_PARENT");
 
     /**

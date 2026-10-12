@@ -54,6 +54,9 @@ public class JwtTokenUtil {
         claims.put("userId", userId);
         claims.put("username", username);
         claims.put(CLAIM_TYPE, REFRESH_TOKEN_TYPE);
+        // ponytail: iat/exp 只有秒级精度，同一用户一秒内两次登录会签出字节相同的 refresh token，
+        // 第二次 register 会把第一次轮换刚删掉的 Redis 键重新登记，旧 token 复活。jti 保证每次签发唯一。
+        claims.put("jti", java.util.UUID.randomUUID().toString());
         return createToken(claims, refreshExpiration);
     }
 

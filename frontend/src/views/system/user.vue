@@ -25,6 +25,7 @@
             <el-option label="管理员" value="admin" />
             <el-option label="教师" value="teacher" />
             <el-option label="学生" value="student" />
+            <el-option label="家长" value="parent" />
           </el-select>
         </el-form-item>
         <el-form-item label="学校">
@@ -87,10 +88,20 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Edit" @click="handleEdit(row as User)">
               编辑
+            </el-button>
+            <!-- ponytail: 家长行多一个「绑定学生」，走 /parents/{id}/children；其他角色不显示 -->
+            <el-button
+              v-if="row.role === 'parent'"
+              link
+              type="success"
+              :icon="Link"
+              @click="handleBindChildren(row as User)"
+            >
+              绑定学生
             </el-button>
             <el-button link type="warning" :icon="Key" @click="handleResetPassword(row as User)">
               重置密码
@@ -143,6 +154,7 @@
             <el-radio value="admin">管理员</el-radio>
             <el-radio value="teacher">教师</el-radio>
             <el-radio value="student">学生</el-radio>
+            <el-radio value="parent">家长</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="学校" prop="schoolId">
@@ -226,13 +238,88 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 家长绑定学生对话框 -->
+    <!-- ponytail: 按学号搜索 /students?studentNo=（后端 LIKE 匹配），选中后 POST /parents/{id}/children；关系取字典 relationship -->
+    <el-dialog
+      v-model="bindDialogVisible"
+      :title="`绑定学生 - ${bindParent?.realName ?? ''}`"
+      width="680px"
+    >
+      <el-form :inline="true" class="bind-form">
+        <el-form-item label="学号">
+          <el-input
+            v-model="bindSearchNo"
+            placeholder="输入学号搜索"
+            clearable
+            style="width: 180px"
+            @keyup.enter="handleBindSearch"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="bindSearching" @click="handleBindSearch">搜索</el-button>
+        </el-form-item>
+      </el-form>
+      <el-form :inline="true" class="bind-form">
+        <el-form-item label="学生">
+          <el-select
+            v-model="bindStudentId"
+            placeholder="请先搜索学号"
+            style="width: 260px"
+            :disabled="bindCandidates.length === 0"
+          >
+            <el-option
+              v-for="s in bindCandidates"
+              :key="s.id"
+              :label="`${s.studentNo} - ${s.name}`"
+              :value="s.id!"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="关系">
+          <el-select v-model="bindRelationship" style="width: 120px">
+            <el-option
+              v-for="o in relationshipOptions"
+              :key="String(o.value)"
+              :label="o.label"
+              :value="o.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-button type="success" :loading="bindSubmitting" :disabled="!bindStudentId" @click="handleBindSubmit">
+            绑定
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-table v-loading="bindLoading" :data="bindChildren" border stripe size="small">
+        <el-table-column prop="studentNo" label="学号" width="140" />
+        <el-table-column prop="name" label="姓名" width="110" />
+        <el-table-column prop="className" label="班级" min-width="120">
+          <template #default="{ row }">{{ row.className || '未分班' }}</template>
+        </el-table-column>
+        <el-table-column prop="relationshipName" label="关系" width="90" />
+        <el-table-column label="操作" width="90">
+          <template #default="{ row }">
+            <el-button link type="danger" @click="handleUnbind(row as ChildBrief)">解绑</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="该家长尚未绑定学生" :image-size="60" />
+        </template>
+      </el-table>
+      <template #footer>
+        <el-button @click="bindDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus, Edit, Delete, Key } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, Edit, Delete, Key, Link } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getUserList,
@@ -247,6 +334,9 @@ import {
 import { getSchoolList, type School } from '@/api/school'
 import { handleError } from '@/utils/errorHandler'
 import type { PageResponse } from '@/types/common'
+import { getParentChildren, bindChild, unbindChild, type ChildBrief } from '@/api/parent'
+import { getStudentList, type Student } from '@/api/student'
+import { useDict } from '@/composables/useDict'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -355,7 +445,8 @@ const getRoleType = (role: string): 'success' | 'warning' | 'info' | 'danger' | 
   const typeMap: Record<string, string> = {
     admin: 'danger',
     teacher: 'warning',
-    student: 'success'
+    student: 'success',
+    parent: 'info'
   }
   return (typeMap[role] as 'success' | 'warning' | 'info' | 'danger') || undefined
 }
@@ -364,7 +455,8 @@ const getRoleLabel = (role: string) => {
   const labelMap: Record<string, string> = {
     admin: '管理员',
     teacher: '教师',
-    student: '学生'
+    student: '学生',
+    parent: '家长'
   }
   return labelMap[role] || role
 }
@@ -516,6 +608,109 @@ const resetForm = () => {
   Object.assign(form, defaultForm())
 }
 
+// ---------------------------------------------------------------- 家长绑定学生
+
+// ponytail: 关系取字典 relationship（V17 种子 father/mother/other），字典缺失时回落同样三项
+const { options: relationshipOptions } = useDict('relationship', [
+  { label: '父亲', value: 'father' },
+  { label: '母亲', value: 'mother' },
+  { label: '其他', value: 'other' }
+])
+
+const bindDialogVisible = ref(false)
+const bindParent = ref<User | null>(null)
+const bindChildren = ref<ChildBrief[]>([])
+const bindLoading = ref(false)
+const bindSearchNo = ref('')
+const bindSearching = ref(false)
+const bindCandidates = ref<Student[]>([])
+const bindStudentId = ref<number>()
+const bindRelationship = ref<string | number>('other')
+const bindSubmitting = ref(false)
+
+const loadBindChildren = async () => {
+  if (!bindParent.value?.id) return
+  bindLoading.value = true
+  try {
+    bindChildren.value = await getParentChildren(bindParent.value.id)
+  } catch (error) {
+    handleError(error, '加载已绑定学生失败')
+  } finally {
+    bindLoading.value = false
+  }
+}
+
+const handleBindChildren = (row: User) => {
+  bindParent.value = row
+  bindSearchNo.value = ''
+  bindCandidates.value = []
+  bindStudentId.value = undefined
+  bindRelationship.value = 'other'
+  bindDialogVisible.value = true
+  loadBindChildren()
+}
+
+const handleBindSearch = async () => {
+  const studentNo = bindSearchNo.value.trim()
+  if (!studentNo) {
+    ElMessage.warning('请输入学号')
+    return
+  }
+  bindSearching.value = true
+  try {
+    // ponytail: 超管建的家长归属某校，按家长 schoolId 限定搜索；校管理员由租户插件自动限本校，后端再做同校校验
+    const res = await getStudentList({
+      studentNo,
+      schoolId: bindParent.value?.schoolId,
+      pageNum: 1,
+      pageSize: 20
+    })
+    bindCandidates.value = res.records || []
+    bindStudentId.value = bindCandidates.value[0]?.id
+    if (bindCandidates.value.length === 0) {
+      ElMessage.info('未找到匹配学号的学生')
+    }
+  } catch (error) {
+    handleError(error, '搜索学生失败')
+  } finally {
+    bindSearching.value = false
+  }
+}
+
+const handleBindSubmit = async () => {
+  if (!bindParent.value?.id || !bindStudentId.value) return
+  bindSubmitting.value = true
+  try {
+    await bindChild(bindParent.value.id, bindStudentId.value, String(bindRelationship.value))
+    ElMessage.success('绑定成功')
+    bindStudentId.value = undefined
+    bindCandidates.value = []
+    bindSearchNo.value = ''
+    loadBindChildren()
+  } catch (error) {
+    handleError(error, '绑定失败')
+  } finally {
+    bindSubmitting.value = false
+  }
+}
+
+const handleUnbind = (row: ChildBrief) => {
+  ElMessageBox.confirm(`确定解除与 ${row.name ?? row.studentNo ?? row.studentId} 的绑定吗？`, '提示', {
+    type: 'warning',
+    confirmButtonText: '确定',
+    cancelButtonText: '取消'
+  }).then(async () => {
+    if (!bindParent.value?.id) return
+    try {
+      await unbindChild(bindParent.value.id, row.studentId)
+      ElMessage.success('已解绑')
+      loadBindChildren()
+    } catch (error) {
+      handleError(error, '解绑失败')
+    }
+  })
+}
+
 onMounted(() => {
   loadSchoolList()
   loadData()
@@ -527,6 +722,10 @@ onMounted(() => {
   .search-form {
     margin-bottom: 20px;
   }
+}
+
+.bind-form {
+  margin-bottom: 8px;
 }
 </style>
 

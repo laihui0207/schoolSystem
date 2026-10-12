@@ -143,4 +143,90 @@ class SecurityUtilsTest {
         assertThrows(BusinessException.class, SecurityUtils::currentTeacherId);
     }
 
+    // ------------------------------------------------------------------
+    // 契约 L：canViewStudent / isParent / currentChildStudentIds
+    // ------------------------------------------------------------------
+
+    private LoginUser.LoginUserBuilder student(Long studentId) {
+        return LoginUser.builder()
+                .userId(20L)
+                .username("student01")
+                .schoolId(2L)
+                .userType(UserRole.STUDENT.getUserType())
+                .studentId(studentId)
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
+    }
+
+    private LoginUser.LoginUserBuilder parent(List<Long> childStudentIds) {
+        return LoginUser.builder()
+                .userId(30L)
+                .username("parent01")
+                .schoolId(2L)
+                .userType(UserRole.PARENT.getUserType())
+                .childStudentIds(childStudentIds)
+                .authorities(List.of(new SimpleGrantedAuthority("ROLE_PARENT")));
+    }
+
+    @Test
+    @DisplayName("canViewStudent：学生只能看本人")
+    void shouldAllowOnlySelf_WhenStudent_ThenCanViewStudent() {
+        // Given
+        authenticate(student(42L).build());
+
+        // Then
+        assertTrue(SecurityUtils.isStudent());
+        assertFalse(SecurityUtils.isParent());
+        assertTrue(SecurityUtils.canViewStudent(42L));
+        assertFalse(SecurityUtils.canViewStudent(43L));
+        assertFalse(SecurityUtils.canViewStudent(null));
+    }
+
+    @Test
+    @DisplayName("canViewStudent：家长只能看已绑定的孩子")
+    void shouldAllowOnlyBoundChildren_WhenParent_ThenCanViewStudent() {
+        // Given
+        authenticate(parent(List.of(42L, 43L)).build());
+
+        // Then
+        assertTrue(SecurityUtils.isParent());
+        assertFalse(SecurityUtils.isStudent());
+        assertTrue(SecurityUtils.canViewStudent(42L));
+        assertTrue(SecurityUtils.canViewStudent(43L));
+        assertFalse(SecurityUtils.canViewStudent(44L));
+        assertFalse(SecurityUtils.canViewStudent(null));
+        assertEquals(List.of(42L, 43L), SecurityUtils.currentChildStudentIds());
+    }
+
+    @Test
+    @DisplayName("canViewStudent：未绑定孩子的家长什么都看不到，childStudentIds 为空列表而非 null")
+    void shouldDenyAll_WhenParentHasNoChildren_ThenEmptyListNotNull() {
+        // Given: builder 未设置 childStudentIds（与 TestAuth 的用法一致）
+        authenticate(parent(null).build());
+
+        // Then
+        assertNotNull(SecurityUtils.currentChildStudentIds());
+        assertTrue(SecurityUtils.currentChildStudentIds().isEmpty());
+        assertFalse(SecurityUtils.canViewStudent(42L));
+    }
+
+    @Test
+    @DisplayName("canViewStudent：教师/管理员放行，取孩子列表则拒绝")
+    void shouldAllowAny_WhenTeacherOrAdmin_ThenCanViewStudentButNoChildren() {
+        // Given: 教师
+        authenticate(teacher().build());
+
+        // Then: 班级范围另由 TeacherScopeService 收窄，这里只做身份维度放行
+        assertTrue(SecurityUtils.canViewStudent(42L));
+        assertTrue(SecurityUtils.canViewStudent(null));
+        BusinessException ex = assertThrows(BusinessException.class, SecurityUtils::currentChildStudentIds);
+        assertEquals(ResultCode.FORBIDDEN.getCode(), ex.getCode());
+
+        // Given: 校管理员
+        authenticate(teacher().userType(UserRole.ADMIN.getUserType()).teacherId(null).build());
+
+        // Then
+        assertTrue(SecurityUtils.canViewStudent(42L));
+        assertFalse(SecurityUtils.isParent());
+    }
+
 }

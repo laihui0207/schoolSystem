@@ -20,6 +20,8 @@ export interface UserInfo {
   studentId?: number | null
   teacherId?: number | null
   headTeacher?: boolean
+  // ponytail: 契约 L — 家长绑定的学生 id（student.id）列表，非家长为空数组；孩子下拉以 /parents/me/children 实时为准
+  childStudentIds?: number[]
 }
 
 const REFRESH_TOKEN_KEY = 'refreshToken'

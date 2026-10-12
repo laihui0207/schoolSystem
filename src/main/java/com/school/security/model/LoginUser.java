@@ -58,6 +58,11 @@ public class LoginUser implements UserDetails, Serializable {
      */
     private final boolean headTeacher;
 
+    /**
+     * 家长绑定的学生ID列表（student.id），非家长账号为空列表（契约 L）
+     */
+    private final List<Long> childStudentIds;
+
     private final Collection<? extends GrantedAuthority> authorities;
 
     /**
@@ -93,6 +98,23 @@ public class LoginUser implements UserDetails, Serializable {
      */
     public boolean isStudent() {
         return UserRole.STUDENT.getUserType().equals(userType);
+    }
+
+    /**
+     * 是否家长：只能查询已绑定孩子（childStudentIds）的成绩
+     */
+    public boolean isParent() {
+        return UserRole.PARENT.getUserType().equals(userType);
+    }
+
+    /**
+     * 家长绑定的学生ID；非家长或未绑定时为空列表，绝不返回 null
+     * <p>
+     * ponytail: 显式 getter 覆盖 Lombok 生成——TestAuth 等既有 builder 调用方不设置该字段，
+     * canViewStudent 里的 contains 不能 NPE
+     */
+    public List<Long> getChildStudentIds() {
+        return childStudentIds == null ? List.of() : childStudentIds;
     }
 
     @Override

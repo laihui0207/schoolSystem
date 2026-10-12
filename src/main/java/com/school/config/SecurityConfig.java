@@ -60,6 +60,10 @@ public class SecurityConfig {
             "/auth/register",
             "/auth/captcha",
             "/auth/refresh",
+            // 手机验证码登录/注册：发码、手机登录、注册页学校下拉都发生在拿到 token 之前
+            "/auth/sms/send",
+            "/auth/login/phone",
+            "/auth/schools",
             "/doc.html",
             "/swagger-ui.html",
             "/swagger-ui/**",

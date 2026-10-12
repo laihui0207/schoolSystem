@@ -5,7 +5,7 @@ export interface User {
   id?: number
   username: string
   realName: string
-  role: 'admin' | 'teacher' | 'student'
+  role: 'admin' | 'teacher' | 'student' | 'parent'
   schoolId?: number
   schoolName?: string
   phone?: string

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.rbac.mapper.SysPermissionMapper">
+
+    <!-- 角色已分配的权限点（排除已逻辑删除的权限） -->
+    <select id="selectByRoleId" resultType="com.school.module.rbac.entity.SysPermission">
+        SELECT p.id,
+               p.permission_code,
+               p.permission_name,
+               p.resource_type,
+               p.url,
+               p.parent_id,
+               p.sort_order,
+               p.created_at,
+               p.updated_at,
+               p.deleted
+        FROM sys_permission p
+                 INNER JOIN sys_role_permission rp ON rp.permission_id = p.id
+        WHERE rp.role_id = #{roleId}
+          AND p.deleted = 0
+        ORDER BY p.parent_id NULLS FIRST, p.sort_order, p.id
+    </select>
+
+</mapper>

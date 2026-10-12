@@ -9,7 +9,13 @@
             <el-option v-for="s in schools" :key="s.id" :label="s.schoolName" :value="s.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!isStudent" label="班级">
+        <!-- ponytail: 家长端——孩子下拉来自 /parents/me/children；后端 listScores 对家长强制 studentId ∈ childStudentIds 且只看已发布 -->
+        <el-form-item v-if="isParent" label="孩子">
+          <el-select v-model="query.studentId" placeholder="请选择孩子" style="width:180px" @change="handleSearch">
+            <el-option v-for="c in children" :key="c.studentId" :label="`${c.name ?? ''}（${c.studentNo ?? ''}）`" :value="c.studentId" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="!isStudent && !isParent" label="班级">
           <el-select v-model="query.classId" placeholder="请选择班级" clearable style="width:160px" :disabled="isSuperAdmin && !query.schoolId">
             <el-option v-for="c in classes" :key="c.id" :label="c.className" :value="c.id" />
           </el-select>
@@ -24,17 +30,17 @@
             <el-option v-for="s in subjects" :key="s.id" :label="s.subjectName" :value="s.id" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="!isStudent" label="学号">
+        <el-form-item v-if="!isStudent && !isParent" label="学号">
           <el-input v-model="query.studentNo" placeholder="学号" clearable style="width:130px" />
         </el-form-item>
-        <el-form-item v-if="!isStudent" label="姓名">
+        <el-form-item v-if="!isStudent && !isParent" label="姓名">
           <el-input v-model="query.studentName" placeholder="姓名" clearable style="width:120px" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">查询</el-button>
           <el-button @click="handleReset">重置</el-button>
           <!-- ponytail: F-01 / 契约 X — 学生无导出权限（后端 /export/scores 对学生 FORBIDDEN），按钮一并隐藏 -->
-          <el-button v-if="!isStudent" type="success" :loading="exporting" :disabled="!query.examId" @click="handleExport">导出 Excel</el-button>
+          <el-button v-if="!isStudent && !isParent" type="success" :loading="exporting" :disabled="!query.examId" @click="handleExport">导出 Excel</el-button>
         </el-form-item>
       </el-form>
 
@@ -97,10 +103,17 @@ import { getClassList } from '@/api/class'
 import { exportScores, downloadScoreReportPdf } from '@/api/export'
 import { getSchoolList } from '@/api/school'
 import { useUserStore } from '@/stores/user'
+import { useRoute } from 'vue-router'
+import { getMyChildren, type ChildBrief } from '@/api/parent'
+import { handleError } from '@/utils/errorHandler'
 
 const userStore = useUserStore()
 const isSuperAdmin = userStore.userInfo?.userType === 1
 const isStudent = userStore.userInfo?.userType === 4
+// ponytail: userType 5 = PARENT；家长查成绩必须带孩子的 studentId，后端 listScores 强制 ∈ childStudentIds 且只看已发布
+const isParent = userStore.userInfo?.userType === 5
+const route = useRoute()
+const children = ref<ChildBrief[]>([])
 
 const loading = ref(false)
 const list = ref<ScoreResponse[]>([])
@@ -112,6 +125,7 @@ const schools = ref<any[]>([])
 
 const query = reactive({
   schoolId: isSuperAdmin ? undefined as number | undefined : userStore.userInfo?.schoolId,
+  studentId: undefined as number | undefined,
   examId: undefined as number | undefined,
   classId: undefined as number | undefined,
   subjectId: undefined as number | undefined,
@@ -128,6 +142,12 @@ const loadData = async () => {
     list.value = []
     total.value = 0
     ElMessage.warning('当前账号未关联学生档案')
+    return
+  }
+  if (isParent && !query.studentId) {
+    list.value = []
+    total.value = 0
+    ElMessage.warning(children.value.length ? '请先选择孩子' : '当前账号尚未绑定孩子，请联系学校管理员')
     return
   }
 
@@ -189,6 +209,7 @@ const pdfLoadingId = ref<number | null>(null)
 const canDownloadPdf = (row: Partial<ScoreResponse>): boolean => {
   if (!row.examId || !row.studentId) return false
   if (isStudent) return row.studentId === userStore.userInfo?.studentId
+  if (isParent) return children.value.some(c => c.studentId === row.studentId)
   return true
 }
 
@@ -217,6 +238,17 @@ const handleReset = () => {
 
 onMounted(async () => {
   const schoolId = userStore.userInfo?.schoolId
+  if (isParent) {
+    // ponytail: 「我的孩子」页带 ?studentId= 跳转过来时默认选中该孩子，否则选第一个
+    try {
+      children.value = await getMyChildren()
+    } catch (error) {
+      handleError(error, '加载孩子列表失败')
+    }
+    const fromRoute = Number(route.query.studentId)
+    const preferred = children.value.find(c => c.studentId === fromRoute) ?? children.value[0]
+    query.studentId = preferred?.studentId
+  }
   if (isSuperAdmin) {
     const schoolRes = await getSchoolList({ pageNum: 1, pageSize: 1000 }) as any
     schools.value = schoolRes?.records ?? []

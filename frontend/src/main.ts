@@ -6,6 +6,7 @@ import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import App from './App.vue'
 import router from './router'
+import permission from './directives/permission'
 
 // 函数式调用的组件（ElMessageBox / ElMessage / ElLoading）不出现在模板里，
 // unplugin-vue-components 的 resolver 扫不到，样式不会被按需注入，
@@ -28,6 +29,8 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(createPinia())
 app.use(router)
+// v-permission：按 GET /me/permissions 的权限码移除无权元素（见 directives/permission.ts）
+app.directive('permission', permission)
 app.use(ElementPlus, {
   locale: zhCn,
 })

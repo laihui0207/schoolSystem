@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.module.parent.mapper.ParentStudentMapper">
+
+    <!-- 某家长绑定的学生ID；登录装载 childStudentIds 时在无认证上下文下执行，表本身也不在租户清单内 -->
+    <select id="selectStudentIdsByParentUserId" resultType="java.lang.Long">
+        SELECT student_id
+        FROM parent_student
+        WHERE parent_user_id = #{parentUserId}
+          AND deleted = 0
+        ORDER BY id
+    </select>
+
+    <!-- 一批学生各自的家长关联行，供通知扩散按 student_id 分组 -->
+    <select id="selectByStudentIds" resultType="com.school.module.parent.entity.ParentStudent">
+        SELECT
+            id,
+            parent_user_id,
+            student_id,
+            relationship,
+            created_at,
+            updated_at,
+            deleted
+        FROM parent_student
+        WHERE deleted = 0
+          AND student_id IN
+        <foreach collection="studentIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY student_id, id
+    </select>
+
+</mapper>

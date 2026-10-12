@@ -45,4 +45,13 @@ public class SysRole extends BaseEntity {
      */
     private Long schoolId;
 
+    /**
+     * 是否内置角色: 0-否 1-是（V19）
+     * <p>
+     * ponytail: 用 Integer 而非 boolean——Lombok 对 boolean isXxx 生成的 getter 是 isBuiltin()，
+     * MyBatis-Plus 反射列名时会丢掉 is 前缀映射成 builtin 列，与 DB 的 is_builtin 对不上。
+     * 内置角色（5 个预置角色）不可删除、role_code 不可修改、权限只能由超管调整。
+     */
+    private Integer isBuiltin;
+
 }

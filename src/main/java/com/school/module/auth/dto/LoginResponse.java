@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * 登录响应DTO
@@ -100,6 +101,11 @@ public class LoginResponse implements Serializable {
          * 角色编码：super_admin / admin / teacher / student / parent
          */
         private String role;
+
+        /**
+         * 家长绑定的学生ID列表（student.id），非家长为空列表（契约 L）
+         */
+        private List<Long> childStudentIds;
     }
 
 }
